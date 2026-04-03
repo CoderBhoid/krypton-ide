@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ChevronRight, ChevronDown, File, Folder, FileJson, FileCode2, FileText, Plus, FolderPlus, Trash2, Edit2, Search, Upload, Download, X, Copy, Share2, Save, Clipboard, FolderDown, MoreVertical } from 'lucide-react';
 import { useIdeStore, FileNode } from '../../store/useIdeStore';
 import { cn } from '../../lib/utils';
+import { Share } from '@capacitor/share';
 import JSZip from 'jszip';
 
 const getFileIcon = (name: string) => {
@@ -173,18 +174,22 @@ export function FileExplorer() {
   const shareFile = async (nodeId: string) => {
     const node = files[nodeId];
     if (!node) return;
-    if (navigator.share) {
-      try {
-        if (node.type === 'file' && node.content) {
-          const file = new window.File([node.content], node.name, { type: 'text/plain' });
-          await navigator.share({ files: [file], title: node.name });
-        } else {
-          await navigator.share({ title: node.name, text: `Shared from Krypton IDE: ${node.name}` });
-        }
-      } catch { /* user cancelled */ }
-    } else {
-      // Fallback: copy path to clipboard
-      await navigator.clipboard.writeText(node.name);
+    try {
+      if (node.type === 'file' && node.content) {
+        await Share.share({
+          title: node.name,
+          text: node.content,
+          dialogTitle: `Share ${node.name}`,
+        });
+      } else {
+        await Share.share({
+          title: node.name,
+          text: `Shared from Krypton IDE: ${node.name}`,
+          dialogTitle: 'Share',
+        });
+      }
+    } catch {
+      // User cancelled or share not available
     }
   };
 
@@ -473,7 +478,7 @@ export function FileExplorer() {
         <>
           <div className="fixed inset-0 z-[100]" onClick={() => setContextMenu(prev => ({ ...prev, visible: false }))} />
           <div
-            className="fixed z-[101] min-w-[180px] bg-[#252526] border border-[#3c3c3c] rounded-xl shadow-2xl py-1 animate-fade-in"
+            className="fixed z-[101] min-w-[180px] bg-[#252526] border border-[#3c3c3c] rounded-xl shadow-2xl py-1 animate-context-pop"
             style={{
               left: `${Math.min(contextMenu.x, window.innerWidth - 200)}px`,
               top: `${Math.min(contextMenu.y, window.innerHeight - 300)}px`,

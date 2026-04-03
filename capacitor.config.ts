@@ -16,8 +16,8 @@ const config: CapacitorConfig = {
 
   plugins: {
     Keyboard: {
-      resize: 'native',
-      resizeOnFullScreen: true,
+      resize: 'none',
+      resizeOnFullScreen: false,
     },
     StatusBar: {
       style: 'DARK',
@@ -33,7 +33,6 @@ const config: CapacitorConfig = {
   },
   
   server: {
-    // Allow loading local files and CDN resources
     androidScheme: 'https',
   },
 };

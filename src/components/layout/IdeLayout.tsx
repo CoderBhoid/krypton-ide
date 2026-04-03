@@ -11,7 +11,7 @@ import { ExtensionsPanel } from '../sidebar/ExtensionsPanel';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
-import { Menu, Play, Files, TerminalSquare, Bot, ArrowLeft, Settings, Puzzle, Upload, Download, X } from 'lucide-react';
+import { Menu, Play, Files, TerminalSquare, Bot, ArrowLeft, Settings, Puzzle, Upload, Download, X, ChevronLeft } from 'lucide-react';
 import JSZip from 'jszip';
 
 interface IdeLayoutProps {
@@ -60,7 +60,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
     }
   }, []);
 
-  // Fix mobile viewport height (accounts for browser chrome)
+  // Fix mobile viewport height + keyboard handling
   useEffect(() => {
     const setVH = () => {
       const vh = window.innerHeight * 0.01;
@@ -69,6 +69,28 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
     setVH();
     window.addEventListener('resize', setVH);
     window.addEventListener('orientationchange', () => setTimeout(setVH, 100));
+
+    // Keyboard-aware: use visualViewport to detect keyboard
+    const vv = window.visualViewport;
+    if (vv) {
+      const onViewportResize = () => {
+        const keyboardHeight = window.innerHeight - vv.height;
+        document.documentElement.style.setProperty('--keyboard-height', `${Math.max(0, keyboardHeight)}px`);
+        if (keyboardHeight > 100) {
+          document.documentElement.classList.add('keyboard-open');
+        } else {
+          document.documentElement.classList.remove('keyboard-open');
+        }
+        // Also recalc vh based on visual viewport
+        const vh = vv.height * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+      };
+      vv.addEventListener('resize', onViewportResize);
+      return () => {
+        window.removeEventListener('resize', setVH);
+        vv.removeEventListener('resize', onViewportResize);
+      };
+    }
     return () => {
       window.removeEventListener('resize', setVH);
     };
@@ -234,9 +256,9 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
         {/* Right side actions — just the Run button, no three dots */}
         <div className="flex items-center space-x-1">
-          <button onClick={handleRun} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white px-3 py-1.5 md:px-2.5 md:py-1 rounded-lg text-sm md:text-xs font-semibold transition-colors shadow-md shadow-emerald-900/30">
-            <Play size={14} fill="currentColor" />
-            <span className="hidden sm:inline">Run</span>
+          <button onClick={handleRun} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white px-4 py-2 md:px-2.5 md:py-1 rounded-lg text-sm md:text-xs font-semibold transition-all duration-200 shadow-lg shadow-emerald-900/40 active:scale-95">
+            <Play size={16} fill="currentColor" />
+            <span>Run</span>
           </button>
 
           {/* Desktop toolbar buttons */}
@@ -328,30 +350,46 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
       {/* Fullscreen Settings Overlay */}
       {showSettings && (
-        <div className="fixed inset-0 z-[60] bg-[#1e1e1e] flex flex-col animate-fade-in">
-          <div className="flex items-center justify-between h-12 bg-[#252526] border-b border-[#1a1a1a] px-3 flex-shrink-0">
-            <h2 className="text-white font-semibold text-sm">Settings</h2>
-            <button onClick={() => setShowSettings(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg">
-              <X size={20} />
+        <div className="fixed inset-0 z-[60] bg-[#1e1e1e] flex flex-col animate-overlay-up">
+          <div className="flex items-center h-12 bg-[#252526] border-b border-[#1a1a1a] px-2 flex-shrink-0">
+            <button onClick={() => setShowSettings(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg mr-1">
+              <ChevronLeft size={22} />
             </button>
+            <h2 className="text-white font-semibold text-sm flex-1">Settings</h2>
           </div>
           <div className="flex-1 overflow-y-auto">
             <SettingsPanel />
+          </div>
+          {/* Nav bar in settings */}
+          <div className="md:hidden flex bg-[#1a1a1a] border-t border-[#2d2d2d] justify-around items-center flex-shrink-0 z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}>
+            <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowSettings(false); setSidebarView('explorer'); }} />
+            <NavButton icon={<TerminalSquare size={19} />} label="Terminal" active={false} onClick={() => { setShowSettings(false); handleToggleTerminal(); }} />
+            <NavButton icon={<Puzzle size={19} />} label="Extend" active={false} onClick={() => { setShowSettings(false); handleNavExtensions(); }} />
+            <NavButton icon={<Bot size={19} />} label="AI" active={false} onClick={() => { setShowSettings(false); setSidebarView('ai'); }} />
+            <NavButton icon={<Settings size={19} />} label="More" active={true} onClick={() => {}} />
           </div>
         </div>
       )}
 
       {/* Fullscreen Extensions Overlay */}
       {showExtensions && (
-        <div className="fixed inset-0 z-[60] bg-[#1e1e1e] flex flex-col animate-fade-in">
-          <div className="flex items-center justify-between h-12 bg-[#252526] border-b border-[#1a1a1a] px-3 flex-shrink-0">
-            <h2 className="text-white font-semibold text-sm">Extensions</h2>
-            <button onClick={() => setShowExtensions(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg">
-              <X size={20} />
+        <div className="fixed inset-0 z-[60] bg-[#1e1e1e] flex flex-col animate-overlay-up">
+          <div className="flex items-center h-12 bg-[#252526] border-b border-[#1a1a1a] px-2 flex-shrink-0">
+            <button onClick={() => setShowExtensions(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg mr-1">
+              <ChevronLeft size={22} />
             </button>
+            <h2 className="text-white font-semibold text-sm flex-1">Extensions</h2>
           </div>
           <div className="flex-1 overflow-y-auto">
             <ExtensionsPanel />
+          </div>
+          {/* Nav bar in extensions */}
+          <div className="md:hidden flex bg-[#1a1a1a] border-t border-[#2d2d2d] justify-around items-center flex-shrink-0 z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}>
+            <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowExtensions(false); setSidebarView('explorer'); }} />
+            <NavButton icon={<TerminalSquare size={19} />} label="Terminal" active={false} onClick={() => { setShowExtensions(false); handleToggleTerminal(); }} />
+            <NavButton icon={<Puzzle size={19} />} label="Extend" active={true} onClick={() => {}} />
+            <NavButton icon={<Bot size={19} />} label="AI" active={false} onClick={() => { setShowExtensions(false); setSidebarView('ai'); }} />
+            <NavButton icon={<Settings size={19} />} label="More" active={false} onClick={() => { setShowExtensions(false); handleNavSettings(); }} />
           </div>
         </div>
       )}
