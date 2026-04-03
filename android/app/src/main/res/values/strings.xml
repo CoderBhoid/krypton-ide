@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Krypton IDE</string>
+    <string name="title_activity_main">Krypton IDE</string>
+    <string name="package_name">com.sednium.krypton</string>
+    <string name="custom_url_scheme">com.sednium.krypton</string>
+</resources>

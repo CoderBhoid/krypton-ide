@@ -1,0 +1,18 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Keystore (NEVER commit)
+*.keystore
+*.jks
+
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
