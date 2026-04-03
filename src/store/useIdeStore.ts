@@ -27,6 +27,7 @@ interface IdeState {
   cursorPosition: CursorPosition;
   isPreviewOpen: boolean;
   isCommandPaletteOpen: boolean;
+  isFullscreen: boolean;
   
   // Actions
   createFile: (name: string, parentId: string | null, type: 'file' | 'folder', content?: string) => string;
@@ -42,6 +43,7 @@ interface IdeState {
   setCursorPosition: (pos: CursorPosition) => void;
   setPreviewOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setFullscreen: (val: boolean) => void;
   
   // Save
   saveFile: (id: string) => void;
@@ -98,6 +100,7 @@ export const useIdeStore = create<IdeState>()(
     cursorPosition: { line: 1, col: 1 },
     isPreviewOpen: false,
     isCommandPaletteOpen: false,
+    isFullscreen: localStorage.getItem('krypton-fullscreen') === 'true',
 
     createFile: (name, parentId, type, content = '') => {
       const id = generateId();
@@ -232,6 +235,11 @@ export const useIdeStore = create<IdeState>()(
     setCursorPosition: (pos) => set({ cursorPosition: pos }),
     setPreviewOpen: (open) => set({ isPreviewOpen: open }),
     setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
+
+    setFullscreen: (val) => {
+      localStorage.setItem('krypton-fullscreen', String(val));
+      set({ isFullscreen: val });
+    },
 
     saveFile: (id) => {
       set((state) => ({

@@ -415,6 +415,8 @@ export function CodeEditor() {
                 </div>
                 )}
               </>
+            )}
+            
             {/* Floating Selection Toolbar */}
             {selectionMenu && selectionMenu.visible && (
               <div 

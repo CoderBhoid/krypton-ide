@@ -140,7 +140,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
         </button>
 
         {/* Version */}
-        <p className="text-gray-700 text-[11px] mt-10">v1.0.0 • Sednium</p>
+        <p className="text-gray-700 text-[11px] mt-10">v1.1 • Sednium</p>
       </div>
     </div>
   );

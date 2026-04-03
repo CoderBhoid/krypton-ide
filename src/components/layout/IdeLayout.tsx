@@ -11,8 +11,10 @@ import { ExtensionsPanel } from '../sidebar/ExtensionsPanel';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
-import { Menu, Play, Files, TerminalSquare, Bot, ArrowLeft, Settings, Puzzle, Upload, Download, X, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, Play, Upload, Download, Files, TerminalSquare, Puzzle, Bot, Settings, ChevronLeft } from 'lucide-react';
 import JSZip from 'jszip';
+import { StatusBar } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 
 interface IdeLayoutProps {
   onBackToProjects: () => void;
@@ -95,6 +97,23 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
       window.removeEventListener('resize', setVH);
     };
   }, []);
+
+  // Handle Fullscreen toggle
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const updateStatusBar = async () => {
+      try {
+        if (useIdeStore.getState().isFullscreen) {
+          await StatusBar.hide();
+        } else {
+          await StatusBar.show();
+        }
+      } catch (e) {
+        console.warn('StatusBar toggling not supported:', e);
+      }
+    };
+    updateStatusBar();
+  }, [useIdeStore.getState().isFullscreen]);
 
   const handleRun = useCallback(() => {
     setPreviewOpen(true);
@@ -185,15 +204,22 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
   };
 
   return (
-    <div className="flex w-full flex-col overflow-hidden text-[#cccccc] font-sans selection:bg-[#264f78]" style={{ height: 'calc(var(--vh, 1vh) * 100)', background: 'var(--ide-bg, #1e1e1e)', color: 'var(--ide-fg, #cccccc)' }}>
-      {/* Top Bar */}
-      <div className="flex h-12 md:h-9 items-center justify-between border-b px-2 text-[13px] flex-shrink-0" style={{ background: 'var(--ide-topbar, #252526)', borderColor: 'var(--ide-border, #1a1a1a)' }}>
+    <div className="flex h-full w-full flex-col bg-[#1e1e1e] overflow-hidden">
+      {/* Top Bar with notch (safe-area) handling on mobile */}
+      <div 
+        className="flex h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-9 items-center justify-between border-b px-2 text-[13px] flex-shrink-0" 
+        style={{ 
+          background: 'var(--ide-topbar, #252526)', 
+          borderColor: 'var(--ide-border, #1a1a1a)',
+          paddingTop: 'env(safe-area-inset-top, 0px)' 
+        }}
+      >
         <div className="flex items-center space-x-1">
           {/* Mobile: Back + Menu */}
-          <button className="p-2 md:hidden hover:bg-white/10 rounded text-gray-300 active:bg-white/20" onClick={onBackToProjects}>
+          <button className="p-2 md:hidden hover:bg-white/10 rounded text-gray-300 active:bg-white/20 mt-1" onClick={onBackToProjects}>
             <ArrowLeft size={20} />
           </button>
-          <button className="p-2 md:p-1 hover:bg-white/10 rounded text-gray-300 md:hidden active:bg-white/20" onClick={toggleSidebar}>
+          <button className="p-2 md:p-1 md:hidden hover:bg-white/10 rounded text-gray-300 active:bg-white/20 mt-1" onClick={toggleSidebar}>
             <Menu size={20} />
           </button>
           
@@ -248,14 +274,13 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
             <button className="px-2 py-0.5 hover:bg-white/10 rounded cursor-pointer text-gray-400 hover:text-white" onClick={handleToggleTerminal}>Terminal</button>
           </div>
         </div>
-        
         {/* Project name centered */}
-        <div className="absolute left-1/2 -translate-x-1/2 text-center text-[12px] font-semibold text-gray-400 flex items-center pointer-events-none max-w-[30%]">
+        <div className="absolute left-1/2 -translate-x-1/2 text-center text-[12px] font-semibold text-gray-400 flex items-center pointer-events-none max-w-[30%] h-full" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <span className="truncate">{currentProject?.name || 'Krypton'}</span>
         </div>
 
         {/* Right side actions — just the Run button, no three dots */}
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1 mt-1 md:mt-0">
           <button onClick={handleRun} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white px-4 py-2 md:px-2.5 md:py-1 rounded-lg text-sm md:text-xs font-semibold transition-all duration-200 shadow-lg shadow-emerald-900/40 active:scale-95">
             <Play size={16} fill="currentColor" />
             <span>Run</span>

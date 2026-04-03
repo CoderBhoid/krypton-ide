@@ -1,12 +1,13 @@
 import React, { useRef, useState } from 'react';
-import { Download, Upload, Moon, Sun, Monitor, Trash2, Info, Github, User, LogOut, ExternalLink, Loader, CloudUpload, Type } from 'lucide-react';
+import { Download, Upload, Moon, Sun, Monitor, Trash2, Info, Github, User, LogOut, ExternalLink, Loader, CloudUpload, Type, Maximize } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import JSZip from 'jszip';
+import { Capacitor } from '@capacitor/core';
 
 export function SettingsPanel() {
-  const { files, loadProject, theme, setTheme } = useIdeStore();
+  const { files, loadProject, theme, setTheme, isFullscreen, setFullscreen } = useIdeStore();
   const { githubToken, githubUser, googleUser, setGithubToken, clearGithub, clearGoogle } = useAuthStore();
   const { projects } = useProjectsStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -366,10 +367,30 @@ export function SettingsPanel() {
         </div>
       </div>
 
-      {/* ── Preferences ── */}
+      {/* ── Editor & View ── */}
       <div>
-        <h3 className="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Preferences</h3>
-        <div className="space-y-3">
+        <h3 className="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Editor & View</h3>
+        
+        {/* Fullscreen Toggle (Native only) */}
+        {Capacitor.isNativePlatform() && (
+          <div className="flex items-center justify-between mb-4 bg-[#1e1e1e] p-3 rounded-lg border border-[#2d2d2d]">
+            <div className="flex items-center space-x-3">
+              <Maximize size={16} className="text-blue-400" />
+              <div>
+                <p className="text-white font-medium text-xs">Immersive Mode</p>
+                <p className="text-gray-500 text-[10px] mt-0.5">Hide device status bar</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setFullscreen(!isFullscreen)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isFullscreen ? 'bg-blue-500' : 'bg-[#3c3c3c]'}`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isFullscreen ? 'translate-x-4.5' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-col space-y-2 mb-4">
           {/* Haptic Feedback Toggle */}
           <div className="bg-[#1e1e1e] rounded-lg border border-[#2d2d2d] p-3">
             <div className="flex items-center justify-between">
@@ -480,7 +501,7 @@ export function SettingsPanel() {
       <div className="border-t border-[#3c3c3c] pt-4 space-y-3">
         <div className="flex items-center space-x-2 text-gray-500 text-xs">
           <Info size={12} />
-          <span>Krypton IDE v2.0 • Mobile Code Editor</span>
+          <span>Krypton IDE v1.1 • Mobile Code Editor</span>
         </div>
         <div className="text-xs text-gray-400 p-3 bg-[#2d2d2d] rounded-lg border border-[#3c3c3c]">
           <p className="mb-2">
