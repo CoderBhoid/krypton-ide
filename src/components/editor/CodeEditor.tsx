@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Editor, { useMonaco } from '@monaco-editor/react';
 import { useIdeStore } from '../../store/useIdeStore';
-import { X, Keyboard, FileCode2, Zap, Eye, Code2, Paintbrush } from 'lucide-react';
+import { X, Keyboard, FileCode2, Zap, Eye, Code2, Paintbrush, Scissors, Copy, ClipboardPaste, Bot } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MarkdownPreview } from './MarkdownPreview';
 import { formatCode } from '../../lib/formatter';
@@ -17,6 +17,9 @@ export function CodeEditor() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [closingTab, setClosingTab] = useState<string | null>(null);
+
+  // Selection floating toolbar state
+  const [selectionMenu, setSelectionMenu] = useState<{ visible: boolean; top: number; left: number; text: string } | null>(null);
 
   // Auto-save every 30 seconds
   useEffect(() => {
@@ -112,6 +115,28 @@ export function CodeEditor() {
       });
     });
 
+    // Custom text selection toolbar logic for mobile
+    editor.onDidChangeCursorSelection((e: any) => {
+      const selection = e.selection;
+      if (!selection.isEmpty()) {
+        const text = editor.getModel().getValueInRange(selection);
+        // Get pixel coordinates of selection start to show the popup
+        const pos = editor.getScrolledVisiblePosition(selection.getStartPosition());
+        const domNode = editor.getDomNode();
+        if (pos && domNode) {
+          const rect = domNode.getBoundingClientRect();
+          setSelectionMenu({
+            visible: true,
+            text,
+            top: rect.top + pos.top - 40, // show slightly above
+            left: rect.left + pos.left
+          });
+        }
+      } else {
+        setSelectionMenu(null);
+      }
+    });
+
     // Configure Advanced IntelliSense for React/TSX
     monacoApi.languages.typescript.typescriptDefaults.setCompilerOptions({
       target: monacoApi.languages.typescript.ScriptTarget.ES2020,
@@ -161,7 +186,31 @@ export function CodeEditor() {
     }
   };
 
-
+  const handleSelectionAction = async (action: 'cut' | 'copy' | 'paste' | 'ai') => {
+    if (!editorInstance || !selectionMenu) return;
+    
+    if (action === 'copy') {
+      await navigator.clipboard.writeText(selectionMenu.text);
+      setSelectionMenu(null);
+    } else if (action === 'cut') {
+      await navigator.clipboard.writeText(selectionMenu.text);
+      editorInstance.trigger('keyboard', 'cut', {});
+      setSelectionMenu(null);
+    } else if (action === 'paste') {
+      const text = await navigator.clipboard.readText();
+      editorInstance.trigger('keyboard', 'paste', { text });
+      setSelectionMenu(null);
+    } else if (action === 'ai') {
+      window.dispatchEvent(new CustomEvent('krypton-send-to-agent', { 
+        detail: { text: `Explain or modify this code:\n\`\`\`\n${selectionMenu.text}\n\`\`\`\n` } 
+      }));
+      setSelectionMenu(null);
+      useIdeStore.getState().setSidebarView('ai');
+      if (!useIdeStore.getState().isSidebarOpen) {
+        useIdeStore.getState().toggleSidebar();
+      }
+    }
+  };
 
   const keys = ['Tab', '{', '}', '[', ']', '(', ')', '<', '>', '=', ';', '"', "'", '/', ':', '!', '&', '|', '#'];
 
@@ -366,6 +415,28 @@ export function CodeEditor() {
                 </div>
                 )}
               </>
+            {/* Floating Selection Toolbar */}
+            {selectionMenu && selectionMenu.visible && (
+              <div 
+                className="fixed z-[60] flex items-center space-x-1 bg-[#252526] border border-[#3c3c3c] rounded-xl shadow-2xl p-1 animate-context-pop pointer-events-auto"
+                style={{
+                  top: `${Math.max(50, selectionMenu.top)}px`,
+                  left: `${Math.min(Math.max(10, selectionMenu.left), window.innerWidth - 200)}px` // keep on screen
+                }}
+              >
+                <button onTouchStart={() => handleSelectionAction('cut')} onClick={() => handleSelectionAction('cut')} className="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors">
+                  <Scissors size={14} /> <span>Cut</span>
+                </button>
+                <button onTouchStart={() => handleSelectionAction('copy')} onClick={() => handleSelectionAction('copy')} className="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors border-l border-[#3c3c3c]">
+                  <Copy size={14} /> <span>Copy</span>
+                </button>
+                <button onTouchStart={() => handleSelectionAction('paste')} onClick={() => handleSelectionAction('paste')} className="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors border-l border-[#3c3c3c]">
+                  <ClipboardPaste size={14} /> <span>Paste</span>
+                </button>
+                <button onTouchStart={() => handleSelectionAction('ai')} onClick={() => handleSelectionAction('ai')} className="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-[#32204c] text-purple-400 hover:text-purple-300 rounded-lg transition-colors border-l border-[#3c3c3c]">
+                  <Bot size={14} /> <span>AI</span>
+                </button>
+              </div>
             )}
           </>
         ) : (
