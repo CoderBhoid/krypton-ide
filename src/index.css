@@ -261,6 +261,10 @@ body {
   transition: height 0.15s ease-out;
 }
 
+.keyboard-open .bottom-nav {
+  display: none !important;
+}
+
 /* Context menu improvements */
 .context-menu-backdrop {
   animation: fadeIn 0.1s ease-out both;

@@ -23,7 +23,7 @@ export function Sidebar() {
         {titles[sidebarView] || sidebarView}
       </div>
       
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
         {sidebarView === 'explorer' && <FileExplorer />}
         {sidebarView === 'git' && <GitPanel />}
         {sidebarView === 'ai' && <AiAssistant />}

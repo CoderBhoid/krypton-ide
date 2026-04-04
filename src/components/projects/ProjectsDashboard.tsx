@@ -42,7 +42,15 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
     const t1 = setTimeout(() => setShowContent(true), 100);
     const t2 = setTimeout(() => setShowButton(true), 500);
     
-    // Web fallback initialization removed to prevent GAPI origin errors
+    try {
+      GoogleAuth.initialize({
+        clientId: GOOGLE_CLIENT_ID,
+        scopes: ['profile', 'email'],
+        grantOfflineAccess: true,
+      });
+    } catch (e) {
+      console.warn('GoogleAuth init failed', e);
+    }
     
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);

@@ -497,7 +497,10 @@ function PreviewHeader({ onClose, onRefresh, isCodeMode, fileName, language, pre
   };
 
   return (
-    <div className="flex items-center justify-between h-12 bg-[#161b22] border-b border-[#21262d] px-3 flex-shrink-0">
+    <div 
+      className="flex items-center justify-between bg-[#161b22] border-b border-[#21262d] px-3 flex-shrink-0"
+      style={{ height: 'calc(3rem + env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
       <div className="flex items-center space-x-2 text-sm text-gray-300">
         <div className={`w-3 h-3 rounded-full ${isCodeMode ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`} />
         <span className="font-medium">{isCodeMode ? 'Output' : 'Preview'}</span>

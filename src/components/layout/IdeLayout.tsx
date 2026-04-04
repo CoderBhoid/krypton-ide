@@ -275,7 +275,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
         </div>
         {/* Project name centered */}
-        <div className="absolute left-1/2 -translate-x-1/2 text-center text-[12px] font-semibold text-gray-500 dark:text-gray-400 flex items-center pointer-events-none max-w-[30%] h-full" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 text-center text-[12px] font-semibold text-gray-500 dark:text-gray-400 flex items-center justify-center pointer-events-none max-w-[30%]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <span className="truncate">{currentProject?.name || 'Krypton'}</span>
         </div>
 
@@ -351,7 +351,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
       
       {/* Mobile Bottom Nav — removed Search, Settings/Extensions open fullscreen */}
       <div 
-        className={`md:hidden flex justify-around items-center flex-shrink-0 z-30 ${
+        className={`md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 ${
           isGlassmorphismEnabled ? 'glass-panel border-t border-gray-200 dark:border-white/5' : 'bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]'
         }`} 
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
