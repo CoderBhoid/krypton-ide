@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Bot, Send, Key, X, Sparkles, Loader2, Plus, MessageSquare, Trash2, ChevronLeft } from 'lucide-react';
+import { Bot, Send, Key, X, Sparkles, Loader2, Plus, MessageSquare, Trash2, ChevronLeft, ChevronDown, ChevronRight, BrainCircuit } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
 import SYSTEM_INSTRUCTION from '../../../Luminous.txt?raw';
 
@@ -7,6 +7,30 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  completedAt?: number;
+}
+
+function ThinkBlock({ content, duration }: { content: string; duration?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  
+  return (
+    <div className="my-2 border border-[#30363d] rounded-lg overflow-hidden w-full max-w-full">
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="w-full bg-[#161b22] hover:bg-[#21262d] px-3 py-2 text-[11px] font-mono text-gray-400 flex items-center transition-colors border-b border-transparent"
+        style={{ borderBottomColor: expanded ? '#30363d' : 'transparent' }}
+      >
+        {expanded ? <ChevronDown size={14} className="mr-2" /> : <ChevronRight size={14} className="mr-2" />}
+        <BrainCircuit size={14} className="mr-2 text-blue-400" />
+        Thought for {duration ? `${(duration / 1000).toFixed(1)} seconds` : 'a few seconds'}
+      </button>
+      {expanded && (
+        <pre className="p-3 text-[11px] overflow-x-auto bg-[#0d1117] text-gray-400 whitespace-pre-wrap font-sans leading-relaxed">
+          {content.trim()}
+        </pre>
+      )}
+    </div>
+  );
 }
 
 interface ChatSession {
@@ -258,9 +282,14 @@ export function AiAssistant() {
     }
   };
 
-  const renderMessageContent = (content: string) => {
-    const parts = content.split(/(<edit file="[^"]+">[\s\S]*?<\/edit>)/g);
+  const renderMessageContent = (content: string, msg: Message) => {
+    const parts = content.split(/(<think>[\s\S]*?<\/think>|<edit file="[^"]+">[\s\S]*?<\/edit>)/g);
     return parts.map((part, i) => {
+      if (part.startsWith('<think>')) {
+        const thoughtContent = part.replace(/^<think>/, '').replace(/<\/think>$/, '');
+        const duration = msg.completedAt ? msg.completedAt - msg.timestamp : undefined;
+        return <ThinkBlock key={i} content={thoughtContent} duration={duration} />;
+      }
       if (part.startsWith('<edit file="')) {
         const match = part.match(/<edit file="([^"]+)">([\s\S]*?)<\/edit>/);
         if (match) {
@@ -298,7 +327,13 @@ export function AiAssistant() {
       }
     }
 
-    const finalSystemInstruction = SYSTEM_INSTRUCTION + contextString;
+    const fileTreeItems = Object.values(files)
+      .filter(f => f.type === 'file')
+      .map(f => `  - ${f.name}`)
+      .join('\n');
+    const projectTreeContext = `\n<project_file_tree>\n${fileTreeItems}\n</project_file_tree>\n`;
+
+    const finalSystemInstruction = SYSTEM_INSTRUCTION + projectTreeContext + contextString;
     const userMessage: Message = { role: 'user', content: input, timestamp: Date.now() };
     const newMessages = [...messages, userMessage];
     updateSessionMessages(activeSessionId, newMessages);
@@ -485,10 +520,10 @@ export function AiAssistant() {
         }
       }
 
-      const finalMessages = [...newMessages, { role: 'assistant' as const, content: assistantContent, timestamp: Date.now() }];
+      const finalMessages = [...newMessages, { role: 'assistant' as const, content: assistantContent, timestamp: userMessage.timestamp, completedAt: Date.now() }];
       updateSessionMessages(activeSessionId, finalMessages);
     } catch (error: any) {
-      const errorMessages = [...newMessages, { role: 'assistant' as const, content: `Error: ${error.message}`, timestamp: Date.now() }];
+      const errorMessages = [...newMessages, { role: 'assistant' as const, content: `Error: ${error.message}`, timestamp: userMessage.timestamp, completedAt: Date.now() }];
       updateSessionMessages(activeSessionId, errorMessages);
     }
 
@@ -674,7 +709,7 @@ export function AiAssistant() {
                 ? 'bg-blue-600 text-white rounded-br-md block' 
                 : 'bg-[#161b22] text-gray-200 border border-[#21262d] rounded-bl-md w-full overflow-hidden'
             }`}>
-              {msg.role === 'assistant' ? renderMessageContent(msg.content) : (
+              {msg.role === 'assistant' ? renderMessageContent(msg.content, msg) : (
                 <pre className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed break-words">{msg.content}</pre>
               )}
             </div>
