@@ -75,9 +75,12 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
       onSkip();
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      // Ignore user cancellations, alert on actual failures
-      if (err?.error !== 'popup_closed_by_user' && err?.message !== 'user_cancelled') {
-        alert('Google sign-in failed. Please try again.');
+      // More robust check for common error objects or strings
+      const errorStr = typeof err === 'string' ? err : (err?.message || err?.error || JSON.stringify(err));
+      const shouldAlert = !errorStr.includes('cancelled') && !errorStr.includes('closed_by_user');
+      
+      if (shouldAlert) {
+        alert('Google sign-in failed. If you are in a web browser, please ensure the origin is authorized in Google Cloud Console.');
       }
     } finally {
       setIsLoading(false);
@@ -85,7 +88,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#050505] flex flex-col items-center justify-center px-8 overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-white dark:bg-[#050505] flex flex-col items-center justify-center px-8 overflow-hidden">
       {/* Background glow effects */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-blue-500/[0.12] blur-[120px] animate-ambient-drift" />
@@ -103,7 +106,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
 
         {/* Title */}
         <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-300 to-indigo-400 mb-3 tracking-tight text-center pb-1">Krypton IDE</h1>
-        <p className="text-gray-400 text-lg mb-12 text-center max-w-[300px] font-medium leading-relaxed">
+        <p className="text-gray-500 dark:text-gray-400 text-lg mb-12 text-center max-w-[300px] font-medium leading-relaxed">
           The premium mobile-first workspace for developers
         </p>
 
@@ -111,7 +114,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
         <button
           onClick={handleGoogleSignIn}
           disabled={isLoading}
-          className={`w-full max-w-[320px] flex items-center justify-center space-x-3 bg-white/5 backdrop-blur-xl border border-white/20 text-white hover:bg-white/15 py-4 rounded-2xl font-semibold text-lg shadow-2xl active:scale-[0.97] transition-all duration-300 mb-4 disabled:opacity-60 premium-glow ${showButton ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}
+          className={`w-full max-w-[320px] flex items-center justify-center space-x-3 bg-gray-50 dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/15 py-4 rounded-2xl font-semibold text-lg shadow-2xl active:scale-[0.97] transition-all duration-300 mb-4 disabled:opacity-60 premium-glow ${showButton ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}
         >
           {isLoading ? (
             <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -128,22 +131,19 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
           )}
         </button>
 
-        {/* Hidden Google Button Container */}
-        <div ref={hiddenBtnRef} className="hidden" />
-
         {/* Get Started / Skip */}
         <button
           onClick={() => {
             localStorage.setItem('krypton-welcomed', 'true');
             onSkip();
           }}
-          className={`text-gray-400 hover:text-gray-200 text-sm py-2 transition-all duration-300 ${showButton ? 'opacity-100' : 'opacity-0'}`}
+          className={`text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 text-sm py-2 transition-all duration-300 ${showButton ? 'opacity-100' : 'opacity-0'}`}
         >
           Skip for now
         </button>
 
         {/* Version */}
-        <p className="text-gray-700 text-[11px] mt-10">v2.0 • Sednium</p>
+        <p className="text-gray-400 dark:text-gray-700 text-[11px] mt-10">v2.0 • Sednium</p>
       </div>
     </div>
   );
