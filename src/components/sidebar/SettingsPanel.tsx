@@ -556,9 +556,9 @@ export function SettingsPanel() {
       <div className="border-t border-[#3c3c3c] pt-4 space-y-3">
         <div className="flex items-center space-x-2 text-gray-500 text-xs">
           <Info size={12} />
-          <span>Krypton IDE v1.1 • Mobile Code Editor</span>
+          <span>Krypton IDE v2.0 • Mobile Code Editor</span>
         </div>
-        <div className="text-xs text-gray-400 p-3 bg-[#2d2d2d] rounded-lg border border-[#3c3c3c]">
+        <div className="text-xs text-gray-400 p-3 bg-gray-100 dark:bg-[#2d2d2d] rounded-lg border border-gray-200 dark:border-[#3c3c3c]">
           <p className="mb-2">
             Developed by <a href="https://sednium.vercel.app" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline transition-colors font-medium">Sednium</a>
           </p>
