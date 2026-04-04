@@ -11,7 +11,17 @@ import { Keyboard } from '@capacitor/keyboard';
 
 export default function App() {
   const { currentProjectId, projects, closeProject } = useProjectsStore();
-  const { loadProject } = useIdeStore();
+  const { loadProject, theme } = useIdeStore();
+
+  // ── Global Theme Injector ──
+  useEffect(() => {
+    const isDark = theme === 'vs-dark' || theme === 'hc-black';
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   // When a project is opened, load its files into the IDE store
   useEffect(() => {

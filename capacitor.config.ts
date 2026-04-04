@@ -30,6 +30,11 @@ const config: CapacitorConfig = {
       androidSplashResourceName: 'splash',
       showSpinner: false,
     },
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      serverClientId: '228869160750-nqir9tev4919koqbcsrnhfo5puorqtqa.apps.googleusercontent.com',
+      forceCodeForRefreshToken: true,
+    },
   },
   
   server: {

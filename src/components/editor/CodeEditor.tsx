@@ -10,7 +10,7 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
 
 export function CodeEditor() {
-  const { files, activeFileId, openFiles, closeFile, setActiveFile, updateFileContent, theme, setCursorPosition, isSidebarOpen } = useIdeStore();
+  const { files, activeFileId, openFiles, closeFile, setActiveFile, updateFileContent, theme, setCursorPosition, isSidebarOpen, isGlassmorphismEnabled } = useIdeStore();
   const [editorInstance, setEditorInstance] = useState<any>(null);
   const [mdViewMode, setMdViewMode] = useState<'edit' | 'preview' | 'split'>('split');
   const monaco = useMonaco();
@@ -215,10 +215,10 @@ export function CodeEditor() {
   const keys = ['Tab', '{', '}', '[', ']', '(', ')', '<', '>', '=', ';', '"', "'", '/', ':', '!', '&', '|', '#'];
 
   return (
-    <div className="flex h-full flex-col bg-[#1e1e1e]">
+    <div className="flex h-full flex-col bg-white dark:bg-[#1e1e1e]">
       {/* Editor Tabs */}
       {openFiles.length > 0 && (
-        <div className="flex h-9 overflow-x-auto bg-[#252526] scrollbar-hide flex-shrink-0 border-b border-[#1a1a1a]">
+        <div className={`flex h-9 overflow-x-auto scrollbar-hide flex-shrink-0 border-b border-gray-200 dark:border-[#1a1a1a] ${isGlassmorphismEnabled ? 'glass-panel z-10' : 'bg-gray-100 dark:bg-[#252526]'}`}>
           {openFiles.map(fileId => {
             const file = files[fileId];
             if (!file) return null;
@@ -228,10 +228,10 @@ export function CodeEditor() {
               <div
                 key={fileId}
                 className={cn(
-                  "group flex min-w-[100px] max-w-[180px] cursor-pointer items-center border-r border-[#1a1a1a] px-3 text-[13px] transition-all",
+                  "group flex min-w-[100px] max-w-[180px] cursor-pointer items-center border-r border-gray-200 dark:border-[#1a1a1a] px-3 text-[13px] transition-all",
                   isActive 
-                    ? "bg-[#1e1e1e] text-white border-t-2 border-t-blue-500" 
-                    : "bg-[#2d2d2d] text-gray-400 hover:bg-[#2d2d2d]/80 active:bg-[#333]",
+                    ? "bg-white dark:bg-[#1e1e1e] text-blue-600 dark:text-white border-t-2 border-t-blue-500" 
+                    : "text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-[#2d2d2d]/80 active:bg-gray-300 dark:active:bg-[#333]",
                   closingTab === fileId && "animate-tab-close"
                 )}
                 onClick={() => setActiveFile(fileId)}
@@ -392,7 +392,7 @@ export function CodeEditor() {
                 {!isSidebarOpen && (
                 <div 
                   ref={toolbarRef}
-                  className="md:hidden fixed left-0 right-0 bg-[#252526] border-t border-[#3c3c3c] flex overflow-x-auto scrollbar-hide py-2 px-2 space-x-1.5 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.4)] transition-[bottom] duration-150 ease-out"
+                  className={`md:hidden fixed left-0 right-0 border-t flex overflow-x-auto scrollbar-hide py-2 px-2 space-x-1.5 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.4)] transition-[bottom] duration-150 ease-out ${isGlassmorphismEnabled ? 'glass-panel border-gray-200 dark:border-white/5' : 'bg-gray-100 dark:bg-[#252526] border-gray-200 dark:border-[#3c3c3c]'}`}
                   style={{ bottom: keyboardHeight > 0 ? `${keyboardHeight}px` : 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
                 >
                   <div className="flex items-center justify-center px-1.5 text-gray-500 flex-shrink-0"><Keyboard size={15}/></div>
@@ -407,7 +407,7 @@ export function CodeEditor() {
                           Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
                         }
                       }} 
-                      className="flex-shrink-0 bg-[#3c3c3c] hover:bg-[#4c4c4c] active:bg-blue-600 text-white min-w-[36px] h-[34px] flex items-center justify-center rounded-md text-sm font-mono transition-colors border border-[#4a4a4a] select-none touch-manipulation"
+                      className="flex-shrink-0 bg-white dark:bg-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#4c4c4c] active:bg-blue-600 active:text-white text-gray-800 dark:text-white min-w-[36px] h-[34px] flex items-center justify-center rounded-md text-sm font-mono transition-colors border border-gray-200 dark:border-[#4a4a4a] select-none touch-manipulation shadow-sm"
                     >
                       {k}
                     </button>

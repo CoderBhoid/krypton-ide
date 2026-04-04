@@ -11,9 +11,9 @@ import { ExtensionsPanel } from '../sidebar/ExtensionsPanel';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
-import { ArrowLeft, Play, Upload, Download, Files, TerminalSquare, Puzzle, Bot, Settings, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, Play, Upload, Download, Files, TerminalSquare, Puzzle, Bot, Settings, ChevronLeft, Menu } from 'lucide-react';
 import JSZip from 'jszip';
-import { StatusBar } from '@capacitor/status-bar';
+import { StatusBar as CapacitorStatusBar } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
 
 interface IdeLayoutProps {
@@ -21,7 +21,7 @@ interface IdeLayoutProps {
 }
 
 export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
-  const { isSidebarOpen, toggleSidebar, sidebarView, setSidebarView, isPreviewOpen, setPreviewOpen, isCommandPaletteOpen, setCommandPaletteOpen, files, saveFile, activeFileId, createFile, openFile, loadProject } = useIdeStore();
+  const { isSidebarOpen, toggleSidebar, sidebarView, setSidebarView, isPreviewOpen, setPreviewOpen, isCommandPaletteOpen, setCommandPaletteOpen, files, saveFile, activeFileId, createFile, openFile, loadProject, isGlassmorphismEnabled } = useIdeStore();
   const { currentProjectId, projects } = useProjectsStore();
   const [terminalHeight, setTerminalHeight] = useState(200);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
@@ -104,9 +104,9 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
     const updateStatusBar = async () => {
       try {
         if (useIdeStore.getState().isFullscreen) {
-          await StatusBar.hide();
+          await CapacitorStatusBar.hide();
         } else {
-          await StatusBar.show();
+          await CapacitorStatusBar.show();
         }
       } catch (e) {
         console.warn('StatusBar toggling not supported:', e);
@@ -204,32 +204,32 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-[#1e1e1e] overflow-hidden">
+    <div className="flex h-full w-full flex-col bg-white dark:bg-[#1e1e1e] overflow-hidden">
       {/* Top Bar with notch (safe-area) handling on mobile */}
       <div 
-        className="flex h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-9 items-center justify-between border-b px-2 text-[13px] flex-shrink-0" 
-        style={{ 
-          background: 'var(--ide-topbar, #252526)', 
-          borderColor: 'var(--ide-border, #1a1a1a)',
-          paddingTop: 'env(safe-area-inset-top, 0px)' 
-        }}
+        className={`flex h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-9 items-center justify-between px-2 text-[13px] flex-shrink-0 z-20 ${
+          isGlassmorphismEnabled
+            ? 'glass-panel border-b border-gray-200 dark:border-white/5'
+            : 'bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a]'
+        }`} 
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="flex items-center space-x-1">
           {/* Mobile: Back + Menu */}
-          <button className="p-2 md:hidden hover:bg-white/10 rounded text-gray-300 active:bg-white/20 mt-1" onClick={onBackToProjects}>
+          <button className="p-2 md:hidden hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 mt-1" onClick={onBackToProjects}>
             <ArrowLeft size={20} />
           </button>
-          <button className="p-2 md:p-1 md:hidden hover:bg-white/10 rounded text-gray-300 active:bg-white/20 mt-1" onClick={toggleSidebar}>
+          <button className="p-2 md:p-1 md:hidden hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 mt-1" onClick={toggleSidebar}>
             <Menu size={20} />
           </button>
           
           {/* Desktop menu */}
           <div className="hidden md:flex space-x-0.5 ml-1">
-            <button className="p-1 hover:bg-white/10 rounded text-gray-400 hover:text-white" onClick={onBackToProjects} title="Back to Projects">
+            <button className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" onClick={onBackToProjects} title="Back to Projects">
               <ArrowLeft size={16} />
             </button>
             <div className="relative">
-              <button className="px-2 py-0.5 hover:bg-white/10 rounded cursor-pointer text-gray-400 hover:text-white" onClick={() => setShowFileMenu(!showFileMenu)}>File</button>
+              <button className="px-2 py-0.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" onClick={() => setShowFileMenu(!showFileMenu)}>File</button>
               {showFileMenu && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowFileMenu(false)} />
@@ -269,13 +269,13 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
                 </>
               )}
             </div>
-            <button className="px-2 py-0.5 hover:bg-white/10 rounded cursor-pointer text-gray-400 hover:text-white" onClick={() => setCommandPaletteOpen(true)}>View</button>
-            <button className="px-2 py-0.5 hover:bg-white/10 rounded cursor-pointer text-gray-400 hover:text-white" onClick={handleRun}>Run</button>
-            <button className="px-2 py-0.5 hover:bg-white/10 rounded cursor-pointer text-gray-400 hover:text-white" onClick={handleToggleTerminal}>Terminal</button>
+            <button className="px-2 py-0.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" onClick={() => setCommandPaletteOpen(true)}>View</button>
+            <button className="px-2 py-0.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" onClick={handleRun}>Run</button>
+            <button className="px-2 py-0.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" onClick={handleToggleTerminal}>Terminal</button>
           </div>
         </div>
         {/* Project name centered */}
-        <div className="absolute left-1/2 -translate-x-1/2 text-center text-[12px] font-semibold text-gray-400 flex items-center pointer-events-none max-w-[30%] h-full" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="absolute left-1/2 -translate-x-1/2 text-center text-[12px] font-semibold text-gray-500 dark:text-gray-400 flex items-center pointer-events-none max-w-[30%] h-full" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <span className="truncate">{currentProject?.name || 'Krypton'}</span>
         </div>
 
@@ -288,16 +288,16 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
           {/* Desktop toolbar buttons */}
           <div className="hidden md:flex items-center space-x-0.5">
-            <button onClick={() => fileInputRef.current?.click()} className="p-1.5 hover:bg-white/10 rounded text-gray-400 hover:text-white transition-colors" title="Upload Files">
+            <button onClick={() => fileInputRef.current?.click()} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors" title="Upload Files">
               <Upload size={15} />
             </button>
-            <button onClick={handleDownloadZip} className="p-1.5 hover:bg-white/10 rounded text-gray-400 hover:text-white transition-colors" title="Download .zip">
+            <button onClick={handleDownloadZip} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors" title="Download .zip">
               <Download size={15} />
             </button>
-            <button onClick={toggleSidebar} className={`p-1.5 hover:bg-white/10 rounded transition-colors ${isSidebarOpen ? 'text-white bg-white/10' : 'text-gray-400'}`} title="Toggle Sidebar">
+            <button onClick={toggleSidebar} className={`p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded transition-colors ${isSidebarOpen ? 'text-gray-900 bg-gray-200 dark:text-white dark:bg-white/10' : 'text-gray-600 dark:text-gray-400'}`} title="Toggle Sidebar">
               <Files size={15} />
             </button>
-            <button onClick={handleToggleTerminal} className={`p-1.5 hover:bg-white/10 rounded transition-colors ${isTerminalOpen ? 'text-white bg-white/10' : 'text-gray-400'}`} title="Toggle Terminal">
+            <button onClick={handleToggleTerminal} className={`p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded transition-colors ${isTerminalOpen ? 'text-gray-900 bg-gray-200 dark:text-white dark:bg-white/10' : 'text-gray-600 dark:text-gray-400'}`} title="Toggle Terminal">
               <TerminalSquare size={15} />
             </button>
           </div>
@@ -350,7 +350,12 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
       </div>
       
       {/* Mobile Bottom Nav — removed Search, Settings/Extensions open fullscreen */}
-      <div className="md:hidden flex bg-[#1a1a1a] border-t border-[#2d2d2d] justify-around items-center flex-shrink-0 z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}>
+      <div 
+        className={`md:hidden flex justify-around items-center flex-shrink-0 z-30 ${
+          isGlassmorphismEnabled ? 'glass-panel border-t border-gray-200 dark:border-white/5' : 'bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]'
+        }`} 
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
+      >
         <NavButton icon={<Files size={19} />} label="Files" active={sidebarView === 'explorer' && isSidebarOpen} onClick={() => setSidebarView('explorer')} />
         <NavButton icon={<TerminalSquare size={19} />} label="Terminal" active={isTerminalOpen} onClick={handleToggleTerminal} />
         <NavButton icon={<Puzzle size={19} />} label="Extend" active={showExtensions} onClick={handleNavExtensions} />
@@ -375,18 +380,21 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
       {/* Fullscreen Settings Overlay */}
       {showSettings && (
-        <div className="fixed inset-0 z-[60] bg-[#1e1e1e] flex flex-col animate-overlay-up">
-          <div className="flex items-center h-12 bg-[#252526] border-b border-[#1a1a1a] px-2 flex-shrink-0">
-            <button onClick={() => setShowSettings(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg mr-1">
+        <div className={`fixed inset-0 z-[60] flex flex-col animate-overlay-up ${isGlassmorphismEnabled ? 'glass-panel' : 'bg-white dark:bg-[#1e1e1e]'}`}>
+          <div className="flex items-center h-12 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a] px-2 flex-shrink-0">
+            <button onClick={() => setShowSettings(false)} className="p-2 text-gray-700 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg mr-1">
               <ChevronLeft size={22} />
             </button>
-            <h2 className="text-white font-semibold text-sm flex-1">Settings</h2>
+            <h2 className="text-gray-900 dark:text-white font-semibold text-sm flex-1">Settings</h2>
           </div>
           <div className="flex-1 overflow-y-auto">
             <SettingsPanel />
           </div>
           {/* Nav bar in settings */}
-          <div className="md:hidden flex bg-[#1a1a1a] border-t border-[#2d2d2d] justify-around items-center flex-shrink-0 z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}>
+          <div 
+            className={`md:hidden flex justify-around items-center flex-shrink-0 z-30 ${isGlassmorphismEnabled ? 'glass-panel border-t border-gray-200 dark:border-white/5' : 'bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]'}`}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
+          >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowSettings(false); setSidebarView('explorer'); }} />
             <NavButton icon={<TerminalSquare size={19} />} label="Terminal" active={false} onClick={() => { setShowSettings(false); handleToggleTerminal(); }} />
             <NavButton icon={<Puzzle size={19} />} label="Extend" active={false} onClick={() => { setShowSettings(false); handleNavExtensions(); }} />
@@ -398,18 +406,21 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
       {/* Fullscreen Extensions Overlay */}
       {showExtensions && (
-        <div className="fixed inset-0 z-[60] bg-[#1e1e1e] flex flex-col animate-overlay-up">
-          <div className="flex items-center h-12 bg-[#252526] border-b border-[#1a1a1a] px-2 flex-shrink-0">
-            <button onClick={() => setShowExtensions(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg mr-1">
+        <div className={`fixed inset-0 z-[60] flex flex-col animate-overlay-up ${isGlassmorphismEnabled ? 'glass-panel' : 'bg-white dark:bg-[#1e1e1e]'}`}>
+          <div className="flex items-center h-12 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a] px-2 flex-shrink-0">
+            <button onClick={() => setShowExtensions(false)} className="p-2 text-gray-700 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg mr-1">
               <ChevronLeft size={22} />
             </button>
-            <h2 className="text-white font-semibold text-sm flex-1">Extensions</h2>
+            <h2 className="text-gray-900 dark:text-white font-semibold text-sm flex-1">Extensions</h2>
           </div>
           <div className="flex-1 overflow-y-auto">
             <ExtensionsPanel />
           </div>
           {/* Nav bar in extensions */}
-          <div className="md:hidden flex bg-[#1a1a1a] border-t border-[#2d2d2d] justify-around items-center flex-shrink-0 z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}>
+          <div 
+            className={`md:hidden flex justify-around items-center flex-shrink-0 z-30 ${isGlassmorphismEnabled ? 'glass-panel border-t border-gray-200 dark:border-white/5' : 'bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]'}`}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
+          >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowExtensions(false); setSidebarView('explorer'); }} />
             <NavButton icon={<TerminalSquare size={19} />} label="Terminal" active={false} onClick={() => { setShowExtensions(false); handleToggleTerminal(); }} />
             <NavButton icon={<Puzzle size={19} />} label="Extend" active={true} onClick={() => {}} />

@@ -1,13 +1,14 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Download, Upload, Moon, Sun, Monitor, Trash2, Info, Github, User, LogOut, ExternalLink, Loader, CloudUpload, Type, Maximize } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import JSZip from 'jszip';
 import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 export function SettingsPanel() {
-  const { files, loadProject, theme, setTheme, isFullscreen, setFullscreen } = useIdeStore();
+  const { files, loadProject, theme, setTheme, isFullscreen, setFullscreen, isGlassmorphismEnabled, setGlassmorphism, isHapticsEnabled, setHaptics } = useIdeStore();
   const { githubToken, githubUser, googleUser, setGithubToken, clearGithub, clearGoogle } = useAuthStore();
   const { projects } = useProjectsStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -19,6 +20,44 @@ export function SettingsPanel() {
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [customFont, setCustomFont] = useState(localStorage.getItem('krypton-custom-font-name') || '');
   const [hapticsKey, setHapticsKey] = useState(0); // for re-render on toggle
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  // Web fallback initialization removed to prevent GAPI origin errors
+
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    try {
+      if (!Capacitor.isNativePlatform()) {
+        // Mock web login for local UI testing to bypass Google's strict origin policies
+        await new Promise(resolve => setTimeout(resolve, 800));
+        useAuthStore.getState().setGoogleUser({
+          name: "Test User",
+          email: "developer@sednium.com",
+          picture: "",
+        });
+        localStorage.setItem('krypton-welcomed', 'true');
+        return;
+      }
+
+      const response = await GoogleAuth.signIn();
+      const givenName = response.givenName || '';
+      const familyName = response.familyName || '';
+      useAuthStore.getState().setGoogleUser({
+        name: response.name || `${givenName} ${familyName}`.trim() || response.email,
+        email: response.email,
+        picture: response.imageUrl || '',
+      });
+      localStorage.setItem('krypton-welcomed', 'true');
+    } catch (err: any) {
+      console.error('Google sign-in error:', err);
+      // Ignore user cancellations
+      if (err?.error !== 'popup_closed_by_user' && err?.message !== 'user_cancelled') {
+        alert('Google sign-in failed. Please try again.');
+      }
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleExportZip = async () => {
     const zip = new JSZip();
@@ -290,9 +329,14 @@ export function SettingsPanel() {
               </button>
             </div>
           ) : (
-            <div className="text-gray-500 text-xs">
-              <p className="mb-2">Google Sign-In will be available once a Client ID is configured.</p>
-              <p className="text-[10px] text-gray-600">Set <code className="bg-[#252526] px-1 rounded">VITE_GOOGLE_CLIENT_ID</code> in your .env file</p>
+            <div className="flex flex-col space-y-2 mt-1">
+              <button
+                onClick={handleGoogleLogin}
+                disabled={isGoogleLoading}
+                className="w-full flex items-center justify-center space-x-2 bg-white hover:bg-gray-100 text-gray-800 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60"
+              >
+                {isGoogleLoading ? <Loader size={14} className="animate-spin" /> : <span>Sign in to sync your projects</span>}
+              </button>
             </div>
           )}
         </div>
@@ -329,14 +373,14 @@ export function SettingsPanel() {
 
       {/* ── Theme ── */}
       <div>
-        <h3 className="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Theme</h3>
+        <h3 className="text-gray-900 dark:text-white font-semibold mb-3 text-xs uppercase tracking-wider">Theme</h3>
         <div className="grid grid-cols-3 gap-2">
           <button 
             onClick={() => setTheme('vs-dark')}
-            className={`flex flex-col items-center p-3 rounded-xl border transition-all ${
+            className={`flex flex-col items-center p-3 rounded-xl border transition-all text-gray-700 dark:text-white ${
               theme === 'vs-dark' 
-                ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10' 
-                : 'border-[#3c3c3c] hover:bg-[#333333] active:bg-[#444]'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-lg shadow-blue-500/10' 
+                : 'border-gray-200 dark:border-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#333333] active:bg-gray-200 dark:active:bg-[#444]'
             }`}
           >
             <Moon size={20} className="mb-1.5" />
@@ -344,10 +388,10 @@ export function SettingsPanel() {
           </button>
           <button 
             onClick={() => setTheme('light')}
-            className={`flex flex-col items-center p-3 rounded-xl border transition-all ${
+            className={`flex flex-col items-center p-3 rounded-xl border transition-all text-gray-700 dark:text-white ${
               theme === 'light' 
-                ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10' 
-                : 'border-[#3c3c3c] hover:bg-[#333333] active:bg-[#444]'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-lg shadow-blue-500/10' 
+                : 'border-gray-200 dark:border-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#333333] active:bg-gray-200 dark:active:bg-[#444]'
             }`}
           >
             <Sun size={20} className="mb-1.5" />
@@ -355,10 +399,10 @@ export function SettingsPanel() {
           </button>
           <button 
             onClick={() => setTheme('hc-black')}
-            className={`flex flex-col items-center p-3 rounded-xl border transition-all ${
+            className={`flex flex-col items-center p-3 rounded-xl border transition-all text-gray-700 dark:text-white ${
               theme === 'hc-black' 
-                ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10' 
-                : 'border-[#3c3c3c] hover:bg-[#333333] active:bg-[#444]'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-lg shadow-blue-500/10' 
+                : 'border-gray-200 dark:border-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#333333] active:bg-gray-200 dark:active:bg-[#444]'
             }`}
           >
             <Monitor size={20} className="mb-1.5" />
@@ -369,21 +413,21 @@ export function SettingsPanel() {
 
       {/* ── Editor & View ── */}
       <div>
-        <h3 className="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Editor & View</h3>
+        <h3 className="text-gray-900 dark:text-white font-semibold mb-3 text-xs uppercase tracking-wider">Editor & View</h3>
         
         {/* Fullscreen Toggle (Native only) */}
         {Capacitor.isNativePlatform() && (
-          <div className="flex items-center justify-between mb-4 bg-[#1e1e1e] p-3 rounded-lg border border-[#2d2d2d]">
+          <div className="flex items-center justify-between mb-4 bg-gray-50 dark:bg-[#1e1e1e] p-3 rounded-lg border border-gray-200 dark:border-[#2d2d2d]">
             <div className="flex items-center space-x-3">
               <Maximize size={16} className="text-blue-400" />
               <div>
-                <p className="text-white font-medium text-xs">Immersive Mode</p>
+                <p className="text-gray-900 dark:text-white font-medium text-xs">Immersive Mode</p>
                 <p className="text-gray-500 text-[10px] mt-0.5">Hide device status bar</p>
               </div>
             </div>
             <button 
               onClick={() => setFullscreen(!isFullscreen)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isFullscreen ? 'bg-blue-500' : 'bg-[#3c3c3c]'}`}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isFullscreen ? 'bg-blue-500' : 'bg-gray-300 dark:bg-[#3c3c3c]'}`}
             >
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isFullscreen ? 'translate-x-4.5' : 'translate-x-1'}`} />
             </button>
@@ -391,30 +435,41 @@ export function SettingsPanel() {
         )}
 
         <div className="flex flex-col space-y-2 mb-4">
-          {/* Haptic Feedback Toggle */}
-          <div className="bg-[#1e1e1e] rounded-lg border border-[#2d2d2d] p-3">
+          {/* Glassmorphism Toggle */}
+          <div className="bg-gray-50 dark:bg-[#1e1e1e] rounded-lg border border-gray-200 dark:border-[#2d2d2d] p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-white text-xs font-medium">Haptic Feedback</p>
-                <p className="text-gray-500 text-[11px] mt-0.5">Vibrate on keyboard toolbar taps</p>
+                <p className="text-gray-900 dark:text-white text-xs font-medium">Use Glassmorphism</p>
+                <p className="text-gray-500 text-[11px] mt-0.5">Premium translucent UI effects</p>
               </div>
               <button
-                onClick={() => {
-                  const current = localStorage.getItem('krypton-haptics') !== 'false';
-                  localStorage.setItem('krypton-haptics', String(!current));
-                  // Force re-render
-                  setTokenInput(prev => prev);
-                }}
+                onClick={() => setGlassmorphism(!isGlassmorphismEnabled)}
                 className={`relative w-10 h-5 rounded-full transition-colors ${
-                  localStorage.getItem('krypton-haptics') !== 'false'
-                    ? 'bg-blue-500'
-                    : 'bg-[#3c3c3c]'
+                  isGlassmorphismEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-[#3c3c3c]'
                 }`}
               >
                 <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${
-                  localStorage.getItem('krypton-haptics') !== 'false'
-                    ? 'translate-x-5'
-                    : 'translate-x-0.5'
+                  isGlassmorphismEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Haptic Feedback Toggle */}
+          <div className="bg-gray-50 dark:bg-[#1e1e1e] rounded-lg border border-gray-200 dark:border-[#2d2d2d] p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-900 dark:text-white text-xs font-medium">Haptic Feedback</p>
+                <p className="text-gray-500 text-[11px] mt-0.5">Vibrate on keyboard toolbar taps</p>
+              </div>
+              <button
+                onClick={() => setHaptics(!isHapticsEnabled)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${
+                  isHapticsEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-[#3c3c3c]'
+                }`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${
+                  isHapticsEnabled ? 'translate-x-5' : 'translate-x-0.5'
                 }`} />
               </button>
             </div>

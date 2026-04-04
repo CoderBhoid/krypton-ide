@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, FolderOpen, Clock, FileCode2, ChevronRight, X, Code2, FileText, Braces } from 'lucide-react';
 import { useProjectsStore, type ProjectTemplate } from '../../store/useProjectsStore';
 import { useAuthStore } from '../../store/useAuthStore';
+import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { useIdeStore } from '../../store/useIdeStore';
 
 const GOOGLE_CLIENT_ID = '228869160750-nqir9tev4919koqbcsrnhfo5puorqtqa.apps.googleusercontent.com';
 
@@ -35,83 +38,80 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
   const [isLoading, setIsLoading] = useState(false);
   const [showContent, setShowContent] = useState(false);
   const [showButton, setShowButton] = useState(false);
-
   useEffect(() => {
     const t1 = setTimeout(() => setShowContent(true), 100);
     const t2 = setTimeout(() => setShowButton(true), 500);
+    
+    // Web fallback initialization removed to prevent GAPI origin errors
+    
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
-  // Initialize Google Identity Services
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      (window as any).google?.accounts?.id?.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleResponse,
-      });
-    };
-    document.head.appendChild(script);
-    return () => { try { document.head.removeChild(script); } catch {} };
-  }, []);
-
-  const handleGoogleResponse = (response: any) => {
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
     try {
-      const payload = JSON.parse(atob(response.credential.split('.')[1]));
+      if (!Capacitor.isNativePlatform()) {
+        // Mock web login for local UI testing to bypass Google's strict origin policies
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setGoogleUser({
+          name: "Test User",
+          email: "developer@sednium.com",
+          picture: "",
+        });
+        localStorage.setItem('krypton-welcomed', 'true');
+        onSkip();
+        return;
+      }
+
+      const response = await GoogleAuth.signIn();
+      const givenName = response.givenName || '';
+      const familyName = response.familyName || '';
       setGoogleUser({
-        name: payload.name,
-        email: payload.email,
-        picture: payload.picture,
+        name: response.name || `${givenName} ${familyName}`.trim() || response.email,
+        email: response.email,
+        picture: response.imageUrl || '',
       });
       localStorage.setItem('krypton-welcomed', 'true');
       onSkip();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Google sign-in error:', err);
-    }
-    setIsLoading(false);
-  };
-
-  const handleGoogleSignIn = () => {
-    setIsLoading(true);
-    if ((window as any).google?.accounts?.id) {
-      (window as any).google.accounts.id.prompt((notification: any) => {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          setIsLoading(false);
-        }
-      });
-    } else {
+      // Ignore user cancellations, alert on actual failures
+      if (err?.error !== 'popup_closed_by_user' && err?.message !== 'user_cancelled') {
+        alert('Google sign-in failed. Please try again.');
+      }
+    } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#0d1117] flex flex-col items-center justify-center px-8">
+    <div className="fixed inset-0 z-[100] bg-[#050505] flex flex-col items-center justify-center px-8 overflow-hidden">
       {/* Background glow effects */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-blue-500/[0.07] blur-[120px]" />
-        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] rounded-full bg-purple-500/[0.05] blur-[100px]" />
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-blue-500/[0.12] blur-[120px] animate-ambient-drift" />
+        <div className="absolute bottom-1/4 left-1/3 w-[500px] h-[500px] rounded-full bg-purple-500/[0.1] blur-[120px] animate-ambient-drift" style={{ animationDelay: '-10s' }} />
       </div>
 
-      <div className={`relative flex flex-col items-center transition-all duration-700 ease-out ${showContent ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+      <div className={`relative flex flex-col items-center transition-all duration-1000 ease-out ${showContent ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-12 scale-95'}`}>
         {/* App Icon */}
-        <div className="mb-8 animate-pulse-glow rounded-3xl overflow-hidden">
-          <img src="/icon.png" alt="Krypton IDE" className="w-24 h-24 rounded-3xl shadow-2xl" />
+        <div className="mb-8 animate-float">
+          <div className="relative">
+            <div className="absolute inset-0 bg-blue-500/30 blur-2xl rounded-3xl animate-pulse-glow" />
+            <img src="/icon.png" alt="Krypton IDE" className="relative w-28 h-28 rounded-[2rem] shadow-2xl shadow-black/50 border border-white/10" />
+          </div>
         </div>
 
         {/* Title */}
-        <h1 className="text-4xl font-bold text-white mb-2 tracking-tight text-center">Krypton IDE</h1>
-        <p className="text-gray-400 text-base mb-12 text-center max-w-[280px]">
-          The mobile-first code editor for developers on the go
+        <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-300 to-indigo-400 mb-3 tracking-tight text-center pb-1">Krypton IDE</h1>
+        <p className="text-gray-400 text-lg mb-12 text-center max-w-[300px] font-medium leading-relaxed">
+          The premium mobile-first workspace for developers
         </p>
 
         {/* Google Sign-In Button */}
         <button
           onClick={handleGoogleSignIn}
           disabled={isLoading}
-          className={`w-full max-w-[300px] flex items-center justify-center space-x-3 bg-white text-gray-800 py-3.5 rounded-2xl font-semibold text-base shadow-xl shadow-white/10 active:scale-[0.97] transition-all duration-200 mb-4 disabled:opacity-60 ${showButton ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+          className={`w-full max-w-[320px] flex items-center justify-center space-x-3 bg-white/5 backdrop-blur-xl border border-white/20 text-white hover:bg-white/15 py-4 rounded-2xl font-semibold text-lg shadow-2xl active:scale-[0.97] transition-all duration-300 mb-4 disabled:opacity-60 premium-glow ${showButton ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}
         >
           {isLoading ? (
             <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -128,6 +128,9 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
           )}
         </button>
 
+        {/* Hidden Google Button Container */}
+        <div ref={hiddenBtnRef} className="hidden" />
+
         {/* Get Started / Skip */}
         <button
           onClick={() => {
@@ -140,7 +143,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
         </button>
 
         {/* Version */}
-        <p className="text-gray-700 text-[11px] mt-10">v1.1 • Sednium</p>
+        <p className="text-gray-700 text-[11px] mt-10">v2.0 • Sednium</p>
       </div>
     </div>
   );
@@ -149,6 +152,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
 export function ProjectsDashboard() {
   const { projects, createProject, deleteProject, renameProject, openProject } = useProjectsStore();
   const { googleUser } = useAuthStore();
+  const { isGlassmorphismEnabled } = useIdeStore();
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate>('html-css-js');
@@ -189,24 +193,29 @@ export function ProjectsDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#050505] text-gray-900 dark:text-white flex flex-col relative overflow-hidden">
+      {/* Ambient Background */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-blue-600/[0.08] blur-[120px] animate-ambient-drift" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-purple-600/[0.06] blur-[120px] animate-ambient-drift" style={{ animationDelay: '-10s' }} />
+      </div>
+
       {/* Welcome Screen */}
       {showWelcome && (
         <WelcomeScreen onSkip={() => setShowWelcome(false)} />
       )}
 
       {/* Header */}
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/10 to-transparent" />
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        
-        <div className="relative px-5 pt-12 pb-6">
-          <div className="flex flex-col items-center text-center space-y-2">
-            <img src="/icon.png" alt="Krypton" className="w-14 h-14 rounded-2xl shadow-lg shadow-blue-500/25" />
+      <div className={`relative z-10 border-x-0 border-t-0 border-b border-gray-200 dark:border-white/5 sticky top-0 ${isGlassmorphismEnabled ? 'glass-panel' : 'bg-white dark:bg-[#161b22]'}`}>
+        <div className="relative px-6 pt-[var(--safe-area-top,48px)] pb-6">
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="relative shadow-lg shadow-blue-500/20 rounded-[1.25rem]">
+              <img src="/icon.png" alt="Krypton" className="w-16 h-16 rounded-[1.25rem] border border-white/10" />
+            </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Krypton IDE</h1>
-              <p className="text-sm text-gray-400 mt-0.5">
-                {googleUser ? `Welcome, ${googleUser.name.split(' ')[0]}` : 'Mobile Code Editor'}
+              <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-300 dark:to-indigo-300">Krypton IDE</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                {googleUser ? `Good to see you, ${googleUser.name.split(' ')[0]}` : 'Your digital workspace'}
               </p>
             </div>
           </div>
@@ -214,28 +223,28 @@ export function ProjectsDashboard() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 px-5 pb-8">
+      <div className="flex-1 px-6 pb-8 relative z-10 mt-6">
         {/* New Project Button */}
         <button 
           onClick={() => setShowNewProject(true)}
-          className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white py-3.5 rounded-xl font-semibold text-base shadow-lg shadow-blue-600/25 active:scale-[0.98] transition-all duration-200 mb-6"
+          className={`w-full flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-[0.98] transition-all duration-300 mb-8 premium-glow ${isGlassmorphismEnabled ? 'bg-gray-900 text-white dark:bg-white dark:text-black shadow-gray-900/10 dark:shadow-white/10' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
         >
-          <Plus size={20} strokeWidth={2.5} />
-          <span>New Project</span>
+          <Plus size={22} strokeWidth={2.5} />
+          <span>Create New Project</span>
         </button>
 
         {/* Projects List */}
         {sortedProjects.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-20 opacity-60">
-            <img src="/icon.png" alt="" className="w-16 h-16 rounded-2xl opacity-30 mb-5" />
+            <img src="/icon.png" alt="" className="w-16 h-16 rounded-2xl opacity-30 dark:opacity-30 mb-5 invert dark:invert-0" />
             <p className="text-lg font-medium text-gray-400 text-center">No projects yet</p>
             <p className="text-sm text-gray-500 mt-1 text-center">Tap "New Project" to get started</p>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Your Projects</h2>
-              <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{sortedProjects.length}</span>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Your Projects</h2>
+              <span className="text-xs text-gray-600 dark:text-gray-500 bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded-full">{sortedProjects.length}</span>
             </div>
             
             {sortedProjects.map((project, i) => {
@@ -245,16 +254,21 @@ export function ProjectsDashboard() {
               return (
                 <div
                   key={project.id}
-                  className="group bg-[#161b22] border border-[#21262d] rounded-xl p-4 active:bg-[#1c2333] transition-all duration-200 cursor-pointer animate-fade-slide-up"
+                  className={`group rounded-2xl p-4 transition-all duration-300 cursor-pointer animate-fade-slide-up relative overflow-hidden ${
+                    isGlassmorphismEnabled 
+                      ? 'glass-panel glass-panel-active glass-panel-hover' 
+                      : 'bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d]'
+                  }`}
                   style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'both' }}
                   onClick={() => {
                     if (editingId !== project.id) openProject(project.id);
                   }}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-3 flex-1 min-w-0">
-                      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${templateInfo?.color || 'from-gray-500 to-gray-700'} flex items-center justify-center flex-shrink-0 shadow-md`}>
-                        {templateInfo?.icon || <FolderOpen size={20} />}
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/[0.02] to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out pointer-events-none" />
+                  <div className="flex items-start justify-between relative z-10">
+                    <div className="flex items-center space-x-4 flex-1 min-w-0">
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${templateInfo?.color || 'from-gray-500 to-gray-700'} flex items-center justify-center flex-shrink-0 shadow-lg`}>
+                        {templateInfo?.icon || <FolderOpen size={24} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         {editingId === project.id ? (
@@ -268,10 +282,10 @@ export function ProjectsDashboard() {
                               if (e.key === 'Escape') setEditingId(null);
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-[#0d1117] border border-blue-500 rounded px-2 py-0.5 text-white text-base w-full focus:outline-none"
+                            className="bg-black/5 dark:bg-white/10 backdrop-blur-md border border-blue-400 rounded-lg px-3 py-1 text-gray-900 dark:text-white text-base font-semibold w-full focus:outline-none shadow-lg"
                           />
                         ) : (
-                          <h3 className="font-semibold text-white truncate text-base">{project.name}</h3>
+                          <h3 className="font-bold text-gray-900 dark:text-white truncate text-lg">{project.name}</h3>
                         )}
                         <div className="flex items-center space-x-3 text-xs text-gray-500 mt-1">
                           <span className="flex items-center space-x-1">
@@ -293,13 +307,13 @@ export function ProjectsDashboard() {
                           setEditingId(project.id);
                           setEditName(project.name);
                         }}
-                        className="p-2 text-gray-500 hover:text-white rounded-lg hover:bg-white/10 active:bg-white/20"
+                        className="p-2 text-gray-500 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 active:bg-gray-200 dark:active:bg-white/20"
                       >
                         <Edit2 size={16} />
                       </button>
                       <button 
                         onClick={(e) => handleDelete(project.id, e)}
-                        className="p-2 text-gray-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 active:bg-red-500/20"
+                        className="p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 active:bg-red-100 dark:active:bg-red-500/20"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -316,57 +330,61 @@ export function ProjectsDashboard() {
       {/* New Project Modal */}
       {showNewProject && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowNewProject(false)} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md animate-fade-in" onClick={() => setShowNewProject(false)} />
           
-          <div className="relative w-full max-w-md bg-[#161b22] border-t sm:border border-[#21262d] rounded-t-2xl sm:rounded-2xl p-6 max-h-[85vh] overflow-y-auto animate-slide-up">
+          <div className={`relative w-full max-w-md sm:border rounded-t-[2rem] sm:rounded-[2rem] p-6 max-h-[85vh] overflow-y-auto animate-slide-up shadow-2xl ${isGlassmorphismEnabled ? 'glass-panel border-gray-200 dark:border-white/10 dark:shadow-black/80 shadow-gray-400/50' : 'bg-white dark:bg-[#161b22] border-gray-200 dark:border-[#30363d]'}`}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">New Project</h2>
-              <button onClick={() => setShowNewProject(false)} className="p-1.5 hover:bg-white/10 rounded-lg">
-                <X size={20} />
+              <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white/90">New Project</h2>
+              <button 
+                onClick={() => setShowNewProject(false)} 
+                className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors active:bg-gray-200 dark:active:bg-white/20"
+              >
+                <X size={22} className="text-gray-500 dark:text-gray-400" />
               </button>
             </div>
 
             {/* Project Name */}
-            <div className="mb-5">
-              <label className="text-sm font-medium text-gray-400 mb-2 block">Project Name</label>
+            <div className="mb-6">
+              <label className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2.5 block uppercase tracking-wider">Project Name</label>
               <input
                 autoFocus
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="My Awesome Project"
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-white text-base placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                className="w-full bg-gray-50 dark:bg-[#050505]/50 border border-gray-200 dark:border-white/10 rounded-2xl px-5 py-4 text-gray-900 dark:text-white text-lg placeholder-gray-400 dark:placeholder-gray-600 focus:border-blue-500/70 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all font-semibold"
               />
             </div>
 
             {/* Template Selection */}
-            <div className="mb-6">
-              <label className="text-sm font-medium text-gray-400 mb-3 block">Template</label>
-              <div className="space-y-2">
+            <div className="mb-8">
+              <label className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 block uppercase tracking-wider">Environment</label>
+              <div className="grid grid-cols-2 gap-3">
                 {templateOptions.map(t => (
                   <button
                     key={t.id}
                     onClick={() => setSelectedTemplate(t.id)}
-                    className={`w-full flex items-center space-x-3 p-3 rounded-xl border transition-all duration-200 text-left ${
+                    className={`flex flex-col items-start p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden ${
                       selectedTemplate === t.id
-                        ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/5'
-                        : 'border-[#21262d] bg-[#0d1117] hover:border-[#30363d] active:bg-[#1c2333]'
+                        ? 'border-blue-500/50 bg-blue-50 dark:bg-blue-500/10 shadow-lg shadow-blue-500/10 scale-[1.02]'
+                        : 'border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${t.color} flex items-center justify-center flex-shrink-0`}>
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center mb-3 shadow-lg`}>
                       {t.icon}
                     </div>
-                    <div>
-                      <div className="font-medium text-white">{t.name}</div>
-                      <div className="text-xs text-gray-500">{t.desc}</div>
+                    <div className="text-left w-full">
+                      <div className="font-bold text-gray-900 dark:text-white/90 mb-1 leading-tight">{t.name}</div>
+                      <div className="text-[11px] text-gray-500 leading-snug line-clamp-2">{t.desc}</div>
                     </div>
-                    {selectedTemplate === t.id && (
-                      <div className="ml-auto w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
-                        <svg viewBox="0 0 12 12" className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M2 6l3 3 5-5" />
+                    {/* Active Selector Ring */}
+                    <div className={`absolute top-4 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${selectedTemplate === t.id ? 'border-blue-500 bg-blue-500' : 'border-gray-200 dark:border-white/20'}`}>
+                      {selectedTemplate === t.id && (
+                        <svg viewBox="0 0 12 12" className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M2 6l3 3 5-5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -375,7 +393,7 @@ export function ProjectsDashboard() {
             {/* Create Button */}
             <button 
               onClick={handleCreate}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white py-3.5 rounded-xl font-semibold text-base shadow-lg active:scale-[0.98] transition-all duration-200"
+              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-[0.98] transition-all duration-300 premium-glow ${isGlassmorphismEnabled ? 'bg-gray-900 text-white dark:bg-white dark:text-black shadow-gray-900/10 dark:shadow-white/10' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
             >
               Create Project
             </button>

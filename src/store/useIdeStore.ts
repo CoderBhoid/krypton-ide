@@ -28,6 +28,8 @@ interface IdeState {
   isPreviewOpen: boolean;
   isCommandPaletteOpen: boolean;
   isFullscreen: boolean;
+  isGlassmorphismEnabled: boolean;
+  isHapticsEnabled: boolean;
   
   // Actions
   createFile: (name: string, parentId: string | null, type: 'file' | 'folder', content?: string) => string;
@@ -44,6 +46,8 @@ interface IdeState {
   setPreviewOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setFullscreen: (val: boolean) => void;
+  setGlassmorphism: (val: boolean) => void;
+  setHaptics: (val: boolean) => void;
   
   // Save
   saveFile: (id: string) => void;
@@ -101,6 +105,8 @@ export const useIdeStore = create<IdeState>()(
     isPreviewOpen: false,
     isCommandPaletteOpen: false,
     isFullscreen: localStorage.getItem('krypton-fullscreen') === 'true',
+    isGlassmorphismEnabled: localStorage.getItem('krypton-glassmorphism') !== 'false',
+    isHapticsEnabled: localStorage.getItem('krypton-haptics') !== 'false',
 
     createFile: (name, parentId, type, content = '') => {
       const id = generateId();
@@ -239,6 +245,16 @@ export const useIdeStore = create<IdeState>()(
     setFullscreen: (val) => {
       localStorage.setItem('krypton-fullscreen', String(val));
       set({ isFullscreen: val });
+    },
+    
+    setGlassmorphism: (val) => {
+      localStorage.setItem('krypton-glassmorphism', String(val));
+      set({ isGlassmorphismEnabled: val });
+    },
+
+    setHaptics: (val) => {
+      localStorage.setItem('krypton-haptics', String(val));
+      set({ isHapticsEnabled: val });
     },
 
     saveFile: (id) => {
