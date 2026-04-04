@@ -33,6 +33,11 @@ export default function App() {
   // ── Capacitor native initialization ──
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
+    
+    document.documentElement.classList.add('is-native');
+    if (Capacitor.getPlatform() === 'android') {
+      document.documentElement.classList.add('is-android');
+    }
 
     // Status bar: dark theme by default
     StatusBar.setStyle({ style: Style.Dark }).catch(() => {});

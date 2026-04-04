@@ -296,14 +296,35 @@ body {
 
 .glass-panel {
   background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(240, 240, 240, 0.8);
+  /* GPU acceleration hint */
+  transform: translateZ(0); 
+  will-change: transform, backdrop-filter;
+}
+
+/* 
+  High Performance Mode for Android/Capacitor:
+  Reduce heavy blur and increase opacity to ensure legibility.
+*/
+.is-native .glass-panel,
+.is-android .glass-panel {
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
 }
 
 .dark .glass-panel {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(45, 45, 45, 0.7); /* Much more opaque default for dark */
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.is-native.dark .glass-panel,
+.is-android.dark .glass-panel {
+  background: rgba(26, 26, 26, 0.9) !important; /* Nearly opaque on Android dark */
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
 }
 
 .glass-panel-hover:hover {
@@ -318,4 +339,10 @@ body {
 
 .premium-glow {
   animation: borderGlow 4s ease-in-out infinite;
+}
+/* Global backdrop-filter mitigation for native performance */
+.is-native [class*='backdrop-blur-'],
+.is-android [class*='backdrop-blur-'] {
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
 }
