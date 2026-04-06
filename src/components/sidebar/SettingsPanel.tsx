@@ -1,56 +1,166 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Download, Upload, Moon, Sun, Monitor, Trash2, Info, Github, User, LogOut, ExternalLink, Loader, CloudUpload, Type, Maximize } from 'lucide-react';
+import { Download, Upload, Moon, Sun, Monitor, Trash2, Info, Github, User, LogOut, ExternalLink, Loader, CloudUpload, CloudDownload, Type, Maximize, ChevronDown, RefreshCw, CheckCircle, Copy, Check } from 'lucide-react';
+import { startDeviceFlow, type DeviceFlowSession } from '../../lib/githubOAuth';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import JSZip from 'jszip';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import {
+  readConfig,
+  saveConfigNow,
+  saveFontFile,
+  deleteFontFile,
+  readFontFile,
+  listFonts,
+  getBasePath,
+} from '../../lib/fileSystemStorage';
+import {
+  syncUpToDrive,
+  syncDownFromDrive,
+  getLastSyncInfo,
+  setDriveAccessToken,
+} from '../../lib/googleDriveSync';
 
 export function SettingsPanel() {
-  const { files, loadProject, theme, setTheme, isFullscreen, setFullscreen, isGlassmorphismEnabled, setGlassmorphism, isHapticsEnabled, setHaptics } = useIdeStore();
-  const { githubToken, githubUser, googleUser, setGithubToken, clearGithub, clearGoogle } = useAuthStore();
+  const { files, loadProject, theme, setTheme, isHapticsEnabled, setHaptics } = useIdeStore();
+  const { githubToken, githubUser, googleUser, googleAccessToken, setGithubToken, clearGithub, clearGoogle, setGoogleAuth } = useAuthStore();
   const { projects } = useProjectsStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
   const [tokenInput, setTokenInput] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState('');
+  // GitHub Device Flow state
+  const [deviceFlowSession, setDeviceFlowSession] = useState<DeviceFlowSession | null>(null);
+  const [deviceFlowStatus, setDeviceFlowStatus] = useState<'idle' | 'waiting' | 'success' | 'error'>('idle');
+  const [codeCopied, setCodeCopied] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [customFont, setCustomFont] = useState(localStorage.getItem('krypton-custom-font-name') || '');
-  const [hapticsKey, setHapticsKey] = useState(0); // for re-render on toggle
+  const [activeFont, setActiveFont] = useState('');
+  const [installedFonts, setInstalledFonts] = useState<string[]>([]);
+  const [showFontDropdown, setShowFontDropdown] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Web fallback initialization removed to prevent GAPI origin errors
+  // Load font list from config on mount
+  useEffect(() => {
+    readConfig().then(config => {
+      if (config) {
+        setActiveFont(config.activeFont || '');
+        setInstalledFonts(config.installedFonts || []);
+      }
+    });
+  }, []);
+
+  // Restore active font on startup
+  useEffect(() => {
+    if (!activeFont) return;
+    loadFontIntoDOM(activeFont);
+  }, [activeFont]);
+
+  async function loadFontIntoDOM(fontName: string) {
+    const fontData = await readFontFile(fontName);
+    if (fontData) {
+      // Remove any existing font-face for this name
+      const existingStyle = document.getElementById(`krypton-font-${fontName}`);
+      if (existingStyle) existingStyle.remove();
+
+      const style = document.createElement('style');
+      style.id = `krypton-font-${fontName}`;
+      style.textContent = `@font-face { font-family: '${fontName}'; src: url('${fontData}'); }`;
+      document.head.appendChild(style);
+
+      // Apply to Monaco editors
+      setTimeout(() => {
+        document.querySelectorAll('.monaco-editor').forEach(el => {
+          (el as HTMLElement).style.fontFamily = `'${fontName}', 'JetBrains Mono', monospace`;
+        });
+      }, 100);
+    }
+  }
+
+  // Initialize GoogleAuth for web fallback if needed
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) {
+      try {
+        GoogleAuth.initialize({
+          clientId: '228869160750-nqir9tev4919koqbcsrnhfo5puorqtqa.apps.googleusercontent.com',
+          scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
+          grantOfflineAccess: true,
+        });
+      } catch (e) {
+        console.warn('GoogleAuth init failed on web:', e);
+      }
+    }
+
+    // If user is already signed in, try to refresh the access token
+    if (googleUser && Capacitor.isNativePlatform()) {
+      refreshGoogleToken();
+    }
+
+    // Load last sync info
+    loadLastSyncInfo();
+  }, []);
+
+  const refreshGoogleToken = async () => {
+    try {
+      const result = await GoogleAuth.refresh();
+      if (result?.accessToken) {
+        setDriveAccessToken(result.accessToken);
+        useAuthStore.getState().setGoogleAuth(
+          googleUser!,
+          result.accessToken
+        );
+      }
+    } catch (e) {
+      console.warn('Token refresh failed — user may need to re-login:', e);
+    }
+  };
+
+  const loadLastSyncInfo = async () => {
+    try {
+      const info = await getLastSyncInfo();
+      if (info?.lastSync) {
+        const d = new Date(info.lastSync);
+        setLastSyncTime(d.toLocaleString());
+      }
+    } catch {
+      // No sync info available
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     try {
       if (!Capacitor.isNativePlatform()) {
-        // Mock web login for local UI testing to bypass Google's strict origin policies
         await new Promise(resolve => setTimeout(resolve, 800));
-        useAuthStore.getState().setGoogleUser({
+        useAuthStore.getState().setGoogleAuth({
           name: "Test User",
           email: "developer@sednium.com",
           picture: "",
-        });
-        localStorage.setItem('krypton-welcomed', 'true');
+        }, 'mock-access-token-for-dev');
+        const config = await readConfig();
+        if (config) { config.welcomed = true; await saveConfigNow(config); }
         return;
       }
 
       const response = await GoogleAuth.signIn();
       const givenName = response.givenName || '';
       const familyName = response.familyName || '';
-      useAuthStore.getState().setGoogleUser({
+      const accessToken = response.authentication?.accessToken || '';
+      const user = {
         name: response.name || `${givenName} ${familyName}`.trim() || response.email,
         email: response.email,
         picture: response.imageUrl || '',
-      });
-      localStorage.setItem('krypton-welcomed', 'true');
+      };
+      setGoogleAuth(user, accessToken);
+      const config = await readConfig();
+      if (config) { config.welcomed = true; await saveConfigNow(config); }
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      // Ignore user cancellations
       if (err?.error !== 'popup_closed_by_user' && err?.message !== 'user_cancelled') {
         alert('Google sign-in failed. Please try again.');
       }
@@ -166,7 +276,7 @@ export function SettingsPanel() {
     }
   };
 
-  const handleClearData = () => {
+  const handleClearData = async () => {
     if (confirm('Clear all local data? This will delete all projects and reset the app.')) {
       localStorage.clear();
       window.location.reload();
@@ -183,69 +293,197 @@ export function SettingsPanel() {
     setIsConnecting(false);
   };
 
-  // Sync projects to Google Drive
-  const handleSyncToDrive = async () => {
+  // GitHub Device Flow login
+  const handleGithubDeviceFlow = async () => {
+    setDeviceFlowStatus('waiting');
+    setConnectError('');
+    try {
+      const session = await startDeviceFlow();
+      setDeviceFlowSession(session);
+      
+      // Wait for user to authorize
+      const result = await session.waitForToken();
+      
+      if (result.status === 'complete') {
+        const success = await setGithubToken(result.token);
+        if (success) {
+          setDeviceFlowStatus('success');
+          setTimeout(() => {
+            setDeviceFlowStatus('idle');
+            setDeviceFlowSession(null);
+          }, 2000);
+        } else {
+          setDeviceFlowStatus('error');
+          setConnectError('Token validation failed');
+        }
+      } else if (result.status === 'expired') {
+        setDeviceFlowStatus('error');
+        setConnectError('Code expired. Try again.');
+      } else if (result.status === 'denied') {
+        setDeviceFlowStatus('idle');
+      } else {
+        setDeviceFlowStatus('error');
+        setConnectError((result as any).message || 'Login failed');
+      }
+    } catch (err: any) {
+      setDeviceFlowStatus('error');
+      setConnectError(err.message || 'Failed to start login');
+    }
+    setDeviceFlowSession(null);
+  };
+
+  const cancelDeviceFlow = () => {
+    if (deviceFlowSession) {
+      deviceFlowSession.cancel();
+      setDeviceFlowSession(null);
+    }
+    setDeviceFlowStatus('idle');
+    setConnectError('');
+  };
+
+  const copyDeviceCode = () => {
+    if (deviceFlowSession) {
+      navigator.clipboard.writeText(deviceFlowSession.userCode).catch(() => {});
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+  };
+
+  // Upload to Google Drive
+  const handleSyncUpload = async () => {
     if (!googleUser) {
       setSyncStatus('Sign in with Google first');
       setTimeout(() => setSyncStatus(null), 3000);
       return;
     }
+
+    // Refresh token first
+    if (Capacitor.isNativePlatform()) {
+      await refreshGoogleToken();
+    }
+
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const data = JSON.stringify(projects, null, 2);
-      const blob = new Blob([data], { type: 'application/json' });
-      const metadata = {
-        name: 'krypton-ide-projects.json',
-        mimeType: 'application/json',
-      };
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-      form.append('file', blob);
-
-      // This requires the user to have granted Drive scope — for now, save locally as backup
-      const backupData = JSON.stringify({ projects, exportedAt: Date.now() });
-      localStorage.setItem('krypton-drive-backup', backupData);
-      setSyncStatus('Projects backed up locally ✓');
-    } catch (err) {
-      setSyncStatus('Sync failed');
+      const result = await syncUpToDrive();
+      setSyncStatus(result.message + (result.success ? ' ✓' : ''));
+      if (result.success) {
+        setLastSyncTime(new Date().toLocaleString());
+      }
+    } catch (err: any) {
+      setSyncStatus(`Upload failed: ${err.message}`);
     }
     setIsSyncing(false);
-    setTimeout(() => setSyncStatus(null), 3000);
+    setTimeout(() => setSyncStatus(null), 5000);
   };
 
-  // Custom font upload
-  const handleFontUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Download from Google Drive
+  const handleSyncDownload = async () => {
+    if (!googleUser) {
+      setSyncStatus('Sign in with Google first');
+      setTimeout(() => setSyncStatus(null), 3000);
+      return;
+    }
+
+    if (!confirm('This will overwrite local data with the cloud backup. Continue?')) return;
+
+    // Refresh token first
+    if (Capacitor.isNativePlatform()) {
+      await refreshGoogleToken();
+    }
+
+    setIsDownloading(true);
+    setSyncStatus(null);
+    try {
+      const result = await syncDownFromDrive();
+      setSyncStatus(result.message + (result.success ? ' ✓' : ''));
+      if (result.success) {
+        setSyncStatus(result.message + ' — Reloading...');
+        // Reload stores from disk after restore
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      }
+    } catch (err: any) {
+      setSyncStatus(`Download failed: ${err.message}`);
+    }
+    setIsDownloading(false);
+    setTimeout(() => setSyncStatus(null), 5000);
+  };
+
+  // Custom font upload — saves to fonts/ folder
+  const handleFontUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const fontData = reader.result as string;
       const fontName = file.name.replace(/\.(ttf|otf|woff2?|eot)$/i, '');
 
-      // Create @font-face
-      const style = document.createElement('style');
-      style.textContent = `@font-face { font-family: '${fontName}'; src: url('${fontData}'); }`;
-      document.head.appendChild(style);
+      // Save font to filesystem
+      await saveFontFile(fontName, fontData);
 
-      // Apply to Monaco
-      const monaco = (window as any).monaco;
-      if (monaco) {
-        monaco.editor.getModels().forEach(() => {});
-        // Update all editors
-        document.querySelectorAll('.monaco-editor').forEach(el => {
-          const editorEl = el as HTMLElement;
-          editorEl.style.fontFamily = `'${fontName}', 'JetBrains Mono', monospace`;
-        });
+      // Update config
+      const config = await readConfig();
+      if (config) {
+        if (!config.installedFonts.includes(fontName)) {
+          config.installedFonts.push(fontName);
+        }
+        config.activeFont = fontName;
+        await saveConfigNow(config);
       }
 
-      localStorage.setItem('krypton-custom-font-name', fontName);
-      localStorage.setItem('krypton-custom-font-data', fontData);
-      setCustomFont(fontName);
+      // Load into DOM
+      await loadFontIntoDOM(fontName);
+
+      setActiveFont(fontName);
+      setInstalledFonts(prev => [...new Set([...prev, fontName])]);
     };
     reader.readAsDataURL(file);
     if (fontInputRef.current) fontInputRef.current.value = '';
+  };
+
+  // Switch active font
+  const handleSelectFont = async (fontName: string) => {
+    setShowFontDropdown(false);
+
+    if (fontName === '') {
+      // Reset to default
+      setActiveFont('');
+      document.querySelectorAll('.monaco-editor').forEach(el => {
+        (el as HTMLElement).style.fontFamily = '';
+      });
+      const config = await readConfig();
+      if (config) { config.activeFont = ''; await saveConfigNow(config); }
+      return;
+    }
+
+    setActiveFont(fontName);
+    await loadFontIntoDOM(fontName);
+    const config = await readConfig();
+    if (config) { config.activeFont = fontName; await saveConfigNow(config); }
+  };
+
+  // Delete a font
+  const handleDeleteFont = async (fontName: string) => {
+    await deleteFontFile(fontName);
+    const newList = installedFonts.filter(f => f !== fontName);
+    setInstalledFonts(newList);
+
+    const config = await readConfig();
+    if (config) {
+      config.installedFonts = newList;
+      if (config.activeFont === fontName) config.activeFont = '';
+      await saveConfigNow(config);
+    }
+
+    if (activeFont === fontName) {
+      setActiveFont('');
+      document.querySelectorAll('.monaco-editor').forEach(el => {
+        (el as HTMLElement).style.fontFamily = '';
+      });
+    }
   };
 
   return (
@@ -274,38 +512,90 @@ export function SettingsPanel() {
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="flex space-x-2">
-                <input
-                  type="password"
-                  value={tokenInput}
-                  onChange={e => setTokenInput(e.target.value)}
-                  placeholder="Personal Access Token"
-                  className="flex-1 rounded border border-[#3c3c3c] bg-[#252526] px-2 py-1.5 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none text-xs"
-                  onKeyDown={e => e.key === 'Enter' && handleGithubConnect()}
-                />
-                <button
-                  onClick={handleGithubConnect}
-                  disabled={isConnecting || !tokenInput.trim()}
-                  className="px-3 py-1.5 bg-[#238636] hover:bg-[#2ea043] text-white rounded text-xs disabled:opacity-50 transition-colors"
-                >
-                  {isConnecting ? <Loader size={12} className="animate-spin" /> : 'Connect'}
-                </button>
-              </div>
-              {connectError && <p className="text-red-400 text-[11px]">{connectError}</p>}
-              <a
-                href="https://github.com/settings/tokens/new?description=Krypton%20IDE&scopes=repo"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center space-x-1 text-blue-400 hover:text-blue-300 text-[11px]"
-              >
-                <ExternalLink size={10} />
-                <span>Get a token →</span>
-              </a>
+              {deviceFlowStatus === 'idle' || deviceFlowStatus === 'error' ? (
+                <>
+                  {/* Primary: OAuth Device Flow login */}
+                  <button
+                    onClick={handleGithubDeviceFlow}
+                    className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-[#238636] hover:bg-[#2ea043] text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <Github size={14} />
+                    <span>Login with GitHub</span>
+                  </button>
+                  {connectError && <p className="text-red-400 text-[11px]">{connectError}</p>}
+                  {/* Fallback: manual token entry */}
+                  <details className="text-[11px]">
+                    <summary className="text-gray-500 cursor-pointer hover:text-gray-400">Use Personal Access Token instead</summary>
+                    <div className="flex space-x-2 mt-2">
+                      <input
+                        type="password"
+                        value={tokenInput}
+                        onChange={e => setTokenInput(e.target.value)}
+                        placeholder="ghp_..."
+                        className="flex-1 rounded border border-[#3c3c3c] bg-[#252526] px-2 py-1.5 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none text-xs"
+                        onKeyDown={e => e.key === 'Enter' && handleGithubConnect()}
+                      />
+                      <button
+                        onClick={handleGithubConnect}
+                        disabled={isConnecting || !tokenInput.trim()}
+                        className="px-3 py-1.5 bg-[#238636] hover:bg-[#2ea043] text-white rounded text-xs disabled:opacity-50 transition-colors"
+                      >
+                        {isConnecting ? <Loader size={12} className="animate-spin" /> : 'Connect'}
+                      </button>
+                    </div>
+                  </details>
+                </>
+              ) : deviceFlowStatus === 'waiting' && deviceFlowSession ? (
+                /* Device Flow: show code to user */
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-[11px]">
+                    Enter this code at <span className="text-blue-400">github.com/login/device</span>
+                  </p>
+                  <div className="flex items-center justify-between bg-[#0d1117] rounded-lg border border-[#30363d] px-3 py-2">
+                    <span className="text-white font-mono text-lg font-bold tracking-[0.3em] select-all">
+                      {deviceFlowSession.userCode}
+                    </span>
+                    <button
+                      onClick={copyDeviceCode}
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-[#30363d] rounded transition-colors"
+                      title="Copy code"
+                    >
+                      {codeCopied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                  <a
+                    href={deviceFlowSession.verificationUri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-[#30363d] hover:bg-[#3c444d] text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <ExternalLink size={12} />
+                    <span>Open github.com/login/device</span>
+                  </a>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center space-x-1.5 text-yellow-500 text-[11px]">
+                      <Loader size={10} className="animate-spin" />
+                      <span>Waiting for authorization...</span>
+                    </span>
+                    <button
+                      onClick={cancelDeviceFlow}
+                      className="text-gray-500 hover:text-red-400 text-[11px] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : deviceFlowStatus === 'success' ? (
+                <div className="flex items-center space-x-2 text-green-400 text-xs py-2">
+                  <CheckCircle size={14} />
+                  <span>Connected to GitHub!</span>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
 
-        {/* Google (placeholder) */}
+        {/* Google */}
         <div className="bg-[#1e1e1e] rounded-lg border border-[#2d2d2d] p-3">
           <div className="flex items-center space-x-2 mb-2">
             <svg viewBox="0 0 24 24" width="16" height="16" className="flex-shrink-0">
@@ -339,6 +629,16 @@ export function SettingsPanel() {
               </button>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Storage Info ── */}
+      <div>
+        <h3 className="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Storage</h3>
+        <div className="bg-[#1e1e1e] rounded-lg border border-[#2d2d2d] p-3">
+          <p className="text-gray-400 text-xs mb-1">Files are stored at:</p>
+          <p className="text-emerald-400 text-xs font-mono break-all">/storage/emulated/0/{getBasePath()}/</p>
+          <p className="text-gray-600 text-[10px] mt-2">Browse with ZArchiver or any file manager</p>
         </div>
       </div>
 
@@ -415,45 +715,6 @@ export function SettingsPanel() {
       <div>
         <h3 className="text-gray-900 dark:text-white font-semibold mb-3 text-xs uppercase tracking-wider">Editor & View</h3>
         
-        {/* Fullscreen Toggle (Native only) */}
-        {Capacitor.isNativePlatform() && (
-          <div className="flex items-center justify-between mb-4 bg-gray-50 dark:bg-[#1e1e1e] p-3 rounded-lg border border-gray-200 dark:border-[#2d2d2d]">
-            <div className="flex items-center space-x-3">
-              <Maximize size={16} className="text-blue-400" />
-              <div>
-                <p className="text-gray-900 dark:text-white font-medium text-xs">Immersive Mode</p>
-                <p className="text-gray-500 text-[10px] mt-0.5">Hide device status bar</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setFullscreen(!isFullscreen)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isFullscreen ? 'bg-blue-500' : 'bg-gray-300 dark:bg-[#3c3c3c]'}`}
-            >
-              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isFullscreen ? 'translate-x-4.5' : 'translate-x-1'}`} />
-            </button>
-          </div>
-        )}
-
-        <div className="flex flex-col space-y-2 mb-4">
-          {/* Glassmorphism Toggle */}
-          <div className="bg-gray-50 dark:bg-[#1e1e1e] rounded-lg border border-gray-200 dark:border-[#2d2d2d] p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-900 dark:text-white text-xs font-medium">Use Glassmorphism</p>
-                <p className="text-gray-500 text-[11px] mt-0.5">Premium translucent UI effects</p>
-              </div>
-              <button
-                onClick={() => setGlassmorphism(!isGlassmorphismEnabled)}
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  isGlassmorphismEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-[#3c3c3c]'
-                }`}
-              >
-                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${
-                  isGlassmorphismEnabled ? 'translate-x-5' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-          </div>
 
           {/* Haptic Feedback Toggle */}
           <div className="bg-gray-50 dark:bg-[#1e1e1e] rounded-lg border border-gray-200 dark:border-[#2d2d2d] p-3">
@@ -475,13 +736,13 @@ export function SettingsPanel() {
             </div>
           </div>
 
-          {/* Custom Font Upload */}
-          <div className="bg-[#1e1e1e] rounded-lg border border-[#2d2d2d] p-3">
-            <div className="flex items-center justify-between">
+          {/* Custom Font — Dropdown + Upload */}
+          <div className="bg-[#1e1e1e] rounded-lg border border-[#2d2d2d] p-3 mt-2">
+            <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="text-white text-xs font-medium">Editor Font</p>
                 <p className="text-gray-500 text-[11px] mt-0.5">
-                  {customFont ? `Using: ${customFont}` : 'JetBrains Mono (default)'}
+                  {activeFont ? `Active: ${activeFont}` : 'JetBrains Mono (default)'}
                 </p>
               </div>
               <button
@@ -489,19 +750,65 @@ export function SettingsPanel() {
                 className="px-3 py-1.5 bg-[#2d2d2d] hover:bg-[#3a3a3a] text-white text-xs rounded-lg transition-colors flex items-center space-x-1.5"
               >
                 <Type size={12} />
-                <span>{customFont ? 'Change' : 'Upload'}</span>
+                <span>Add Font</span>
               </button>
             </div>
-            {customFont && (
+
+            {/* Font Dropdown */}
+            {installedFonts.length > 0 && (
+              <div className="relative mt-2">
+                <button
+                  onClick={() => setShowFontDropdown(!showFontDropdown)}
+                  className="w-full flex items-center justify-between bg-[#252526] border border-[#3c3c3c] rounded-lg px-3 py-2 text-xs text-white hover:bg-[#2d2d2d] transition-colors"
+                >
+                  <span>{activeFont || 'Default (JetBrains Mono)'}</span>
+                  <ChevronDown size={14} className={`transform transition-transform ${showFontDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showFontDropdown && (
+                  <div className="absolute left-0 right-0 mt-1 bg-[#252526] border border-[#3c3c3c] rounded-lg shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto">
+                    {/* Default option */}
+                    <button
+                      onClick={() => handleSelectFont('')}
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-[#2d2d2d] transition-colors flex items-center justify-between ${
+                        !activeFont ? 'text-blue-400 bg-blue-500/10' : 'text-white'
+                      }`}
+                    >
+                      <span>Default (JetBrains Mono)</span>
+                      {!activeFont && <span className="text-blue-400">✓</span>}
+                    </button>
+
+                    {installedFonts.map(font => (
+                      <div
+                        key={font}
+                        className={`flex items-center justify-between px-3 py-2 text-xs hover:bg-[#2d2d2d] transition-colors ${
+                          activeFont === font ? 'text-blue-400 bg-blue-500/10' : 'text-white'
+                        }`}
+                      >
+                        <button
+                          onClick={() => handleSelectFont(font)}
+                          className="flex-1 text-left"
+                        >
+                          {font}
+                          {activeFont === font && <span className="ml-2 text-blue-400">✓</span>}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteFont(font); }}
+                          className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded ml-2 flex-shrink-0"
+                          title="Remove font"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeFont && (
               <button
-                onClick={() => {
-                  localStorage.removeItem('krypton-custom-font-name');
-                  localStorage.removeItem('krypton-custom-font-data');
-                  setCustomFont('');
-                  document.querySelectorAll('.monaco-editor').forEach(el => {
-                    (el as HTMLElement).style.fontFamily = '';
-                  });
-                }}
+                onClick={() => handleSelectFont('')}
                 className="text-[11px] text-red-400 hover:text-red-300 mt-2 transition-colors"
               >
                 Reset to default
@@ -514,27 +821,70 @@ export function SettingsPanel() {
               className="hidden"
               onChange={handleFontUpload}
             />
-          </div>
         </div>
       </div>
 
       {/* ── Sync ── */}
       <div>
-        <h3 className="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Sync</h3>
-        <button
-          onClick={handleSyncToDrive}
-          disabled={isSyncing}
-          className="w-full flex items-center justify-center space-x-2 bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] py-2.5 rounded-lg transition-colors disabled:opacity-50"
-        >
-          {isSyncing ? (
-            <Loader size={16} className="animate-spin" />
-          ) : (
-            <CloudUpload size={16} />
+        <h3 className="text-white font-semibold mb-3 text-xs uppercase tracking-wider">Cloud Sync</h3>
+        
+        {/* Sync info */}
+        {googleUser && lastSyncTime && (
+          <div className="bg-[#1e1e1e] rounded-lg border border-[#2d2d2d] p-3 mb-3">
+            <div className="flex items-center space-x-2 text-gray-400">
+              <CheckCircle size={12} className="text-green-400" />
+              <span className="text-[11px]">Last synced: {lastSyncTime}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {/* Upload to Drive */}
+          <button
+            onClick={handleSyncUpload}
+            disabled={isSyncing || !googleUser}
+            className="w-full flex items-center justify-center space-x-2 bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] py-2.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {isSyncing ? (
+              <Loader size={16} className="animate-spin" />
+            ) : (
+              <CloudUpload size={16} />
+            )}
+            <span>{isSyncing ? 'Uploading...' : 'Backup to Google Drive'}</span>
+          </button>
+
+          {/* Download from Drive */}
+          <button
+            onClick={handleSyncDownload}
+            disabled={isDownloading || !googleUser}
+            className="w-full flex items-center justify-center space-x-2 bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] py-2.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {isDownloading ? (
+              <Loader size={16} className="animate-spin" />
+            ) : (
+              <CloudDownload size={16} />
+            )}
+            <span>{isDownloading ? 'Downloading...' : 'Restore from Google Drive'}</span>
+          </button>
+
+          {/* Refresh token */}
+          {googleUser && Capacitor.isNativePlatform() && (
+            <button
+              onClick={refreshGoogleToken}
+              className="w-full flex items-center justify-center space-x-2 text-gray-500 hover:text-gray-300 py-1.5 text-[11px] transition-colors"
+            >
+              <RefreshCw size={12} />
+              <span>Refresh Auth Token</span>
+            </button>
           )}
-          <span>{isSyncing ? 'Syncing...' : 'Backup Projects'}</span>
-        </button>
+        </div>
+
+        {!googleUser && (
+          <p className="text-gray-600 text-[11px] mt-2 text-center">Sign in with Google above to enable sync</p>
+        )}
+
         {syncStatus && (
-          <p className={`text-[11px] mt-2 text-center ${syncStatus.includes('✓') ? 'text-green-400' : 'text-yellow-400'}`}>
+          <p className={`text-[11px] mt-2 text-center ${syncStatus.includes('✓') ? 'text-green-400' : syncStatus.includes('failed') ? 'text-red-400' : 'text-yellow-400'}`}>
             {syncStatus}
           </p>
         )}
@@ -556,7 +906,7 @@ export function SettingsPanel() {
       <div className="border-t border-[#3c3c3c] pt-4 space-y-3">
         <div className="flex items-center space-x-2 text-gray-500 text-xs">
           <Info size={12} />
-          <span>Krypton IDE v2.0 • Mobile Code Editor</span>
+          <span>Krypton IDE v2.5 • Mobile Code Editor</span>
         </div>
         <div className="text-xs text-gray-400 p-3 bg-gray-100 dark:bg-[#2d2d2d] rounded-lg border border-gray-200 dark:border-[#3c3c3c]">
           <p className="mb-2">
@@ -570,4 +920,3 @@ export function SettingsPanel() {
     </div>
   );
 }
-

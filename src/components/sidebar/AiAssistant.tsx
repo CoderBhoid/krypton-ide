@@ -1,248 +1,113 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Bot, Send, Key, X, Sparkles, Loader2, Plus, MessageSquare, Trash2, ChevronLeft, ChevronDown, ChevronRight, BrainCircuit } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bot, Send, Key, X, Sparkles, Loader2, Plus, MessageSquare, Trash2, ChevronDown, ChevronRight, BrainCircuit, FileCode, CheckCircle2, AlertCircle, Square, ClipboardList, Zap, Maximize, Minimize } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
-import SYSTEM_INSTRUCTION from '../../../Luminous.txt?raw';
-
-interface Message {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: number;
-  completedAt?: number;
-}
+import { useAiStore, Message } from '../../store/useAiStore';
+import { useDynamicModels } from '../../hooks/useDynamicModels';
+import SYSTEM_INSTRUCTION from '../../../Sedna.txt?raw';
 
 function ThinkBlock({ content, duration }: { content: string; duration?: number }) {
   const [expanded, setExpanded] = useState(false);
-  
   return (
     <div className="my-2 border border-[#30363d] rounded-lg overflow-hidden w-full max-w-full">
-      <button 
-        onClick={() => setExpanded(!expanded)}
-        className="w-full bg-[#161b22] hover:bg-[#21262d] px-3 py-2 text-[11px] font-mono text-gray-400 flex items-center transition-colors border-b border-transparent"
-        style={{ borderBottomColor: expanded ? '#30363d' : 'transparent' }}
-      >
+      <button onClick={() => setExpanded(!expanded)} className="w-full bg-[#161b22] hover:bg-[#21262d] px-3 py-2 text-[11px] font-mono text-gray-400 flex items-center transition-colors border-b border-transparent" style={{ borderBottomColor: expanded ? '#30363d' : 'transparent' }}>
         {expanded ? <ChevronDown size={14} className="mr-2" /> : <ChevronRight size={14} className="mr-2" />}
         <BrainCircuit size={14} className="mr-2 text-blue-400" />
         Thought for {duration ? `${(duration / 1000).toFixed(1)} seconds` : 'a few seconds'}
       </button>
-      {expanded && (
-        <pre className="p-3 text-[11px] overflow-x-auto bg-[#0d1117] text-gray-400 whitespace-pre-wrap font-sans leading-relaxed">
-          {content.trim()}
-        </pre>
-      )}
+      {expanded && <pre className="p-3 text-[11px] overflow-x-auto bg-[#0d1117] text-gray-400 whitespace-pre-wrap font-sans leading-relaxed">{content.trim()}</pre>}
     </div>
   );
 }
 
-interface ChatSession {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: number;
-  updatedAt: number;
+function PlanBlock({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <div className="my-2 border border-amber-800/40 rounded-lg overflow-hidden w-full max-w-full">
+      <button onClick={() => setExpanded(!expanded)} className="w-full bg-amber-950/30 hover:bg-amber-950/50 px-3 py-2 text-[11px] font-mono text-amber-300 flex items-center transition-colors">
+        {expanded ? <ChevronDown size={14} className="mr-2" /> : <ChevronRight size={14} className="mr-2" />}
+        <ClipboardList size={14} className="mr-2 text-amber-400" />
+        Implementation Plan
+      </button>
+      {expanded && <pre className="p-3 text-[11px] overflow-x-auto bg-[#0d1117] text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">{content.trim()}</pre>}
+    </div>
+  );
 }
 
-type Provider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'mistral' | 'openrouter';
-
-interface ProviderConfig {
-  id: Provider;
-  name: string;
-  placeholder: string;
-  models: string[];
-  defaultModel: string;
-  baseUrl: string;
+function StatusBlock({ content }: { content: string }) {
+  return (
+    <div className="my-1 flex items-center space-x-2 px-3 py-1.5 bg-blue-950/20 border border-blue-800/30 rounded-lg">
+      <Zap size={12} className="text-blue-400 shrink-0" />
+      <span className="text-[11px] text-blue-300 font-mono">{content.trim()}</span>
+    </div>
+  );
 }
 
-const PROVIDERS: ProviderConfig[] = [
-  {
-    id: 'gemini',
-    name: 'Google Gemini',
-    placeholder: 'AIzaSy...',
-    models: ['gemini-3.0-pro', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemma-4-27b-it', 'gemma-3-27b-it'],
-    defaultModel: 'gemini-2.5-flash',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    placeholder: 'sk-...',
-    models: ['gpt-5.4', 'gpt-5.4-turbo', 'gpt-5', 'gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o1'],
-    defaultModel: 'gpt-5.4',
-    baseUrl: 'https://api.openai.com/v1',
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic Claude',
-    placeholder: 'sk-ant-...',
-    models: ['claude-4.6-opus', 'claude-4.6-sonnet', 'claude-4.5-opus', 'claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022'],
-    defaultModel: 'claude-4.6-opus',
-    baseUrl: 'https://api.anthropic.com/v1',
-  },
-  {
-    id: 'groq',
-    name: 'Groq',
-    placeholder: 'gsk_...',
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'],
-    defaultModel: 'llama-3.3-70b-versatile',
-    baseUrl: 'https://api.groq.com/openai/v1',
-  },
-  {
-    id: 'mistral',
-    name: 'Mistral AI',
-    placeholder: 'M...',
-    models: ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
-    defaultModel: 'mistral-large-latest',
-    baseUrl: 'https://api.mistral.ai/v1',
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    placeholder: 'sk-or-...',
-    models: ['anthropic/claude-3.7-sonnet', 'google/gemini-2.5-flash', 'google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.3-70b-instruct:free', 'deepseek/deepseek-r1:free'],
-    defaultModel: 'google/gemini-2.5-flash',
-    baseUrl: 'https://openrouter.ai/api/v1',
-  },
+function ToolResultBlock({ msg }: { msg: Message }) {
+  const isError = msg.content.toLowerCase().includes('error');
+  const toolLabel = msg.name === 'read_file' ? 'Read File' 
+    : msg.name === 'edit_lines' ? 'Edited Lines'
+    : msg.name === 'insert_lines' ? 'Inserted Lines'
+    : msg.name === 'patch_file' ? 'Patched File'
+    : msg.name === 'write_new_file' ? 'Created File'
+    : msg.name === 'create_directory' ? 'Created Directory'
+    : 'Tool Result';
+  return (
+    <div className="my-2 border border-[#30363d] rounded-lg overflow-hidden w-full max-w-full bg-[#0d1117]">
+      <div className="px-3 py-1.5 flex items-center justify-between border-b border-[#30363d]">
+        <div className="flex items-center space-x-2">
+          {isError ? <AlertCircle size={12} className="text-red-400" /> : <CheckCircle2 size={12} className="text-emerald-400" />}
+          <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">{toolLabel}</span>
+        </div>
+      </div>
+      <pre className="p-2.5 text-[10px] font-mono text-gray-500 overflow-x-auto max-h-32">
+        {msg.content.slice(0, 500)}{msg.content.length > 500 ? '...' : ''}
+      </pre>
+    </div>
+  );
+}
+
+const PROVIDERS = [
+  { id: 'gemini', name: 'Google Gemini', placeholder: 'AIzaSy...', models: ['gemini-3.0-pro', 'gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'], defaultModel: 'gemini-1.5-flash', baseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+  { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o3-mini'], defaultModel: 'gpt-4o', baseUrl: 'https://api.openai.com/v1' },
+  { id: 'anthropic', name: 'Anthropic Claude', placeholder: 'sk-ant-...', models: ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'], defaultModel: 'claude-3-7-sonnet-20250219', baseUrl: 'https://api.anthropic.com/v1' },
+  { id: 'groq', name: 'Groq', placeholder: 'gsk_...', models: ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'], defaultModel: 'llama-3.3-70b-versatile', baseUrl: 'https://api.groq.com/openai/v1' },
+  { id: 'mistral', name: 'Mistral AI', placeholder: 'M...', models: ['mistral-large-latest', 'codestral-latest'], defaultModel: 'mistral-large-latest', baseUrl: 'https://api.mistral.ai/v1' },
+  { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...', models: ['anthropic/claude-3.7-sonnet', 'google/gemini-2.0-flash-exp:free'], defaultModel: 'google/gemini-2.0-flash-exp:free', baseUrl: 'https://openrouter.ai/api/v1' },
 ];
 
-// ─── Session Persistence ─────────────────────────────────
-const SESSIONS_KEY = 'krypton-ai-sessions';
-const ACTIVE_SESSION_KEY = 'krypton-ai-active-session';
-
-function loadSessions(): ChatSession[] {
-  try {
-    return JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
-  } catch { return []; }
-}
-
-function saveSessions(sessions: ChatSession[]) {
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-}
-
-function createNewSession(): ChatSession {
-  return {
-    id: crypto.randomUUID(),
-    title: 'New Chat',
-    messages: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-}
-
-function generateTitle(msg: string): string {
-  const clean = msg.replace(/@\S+/g, '').trim();
-  return clean.length > 40 ? clean.slice(0, 40) + '…' : clean || 'New Chat';
-}
-
-// ─── Global pending request (survives tab switches) ──────
-let pendingAbort: AbortController | null = null;
-
 export function AiAssistant() {
-  const { files, updateFileContent, saveFile, createFile } = useIdeStore();
-  
-  // Sessions
-  const [sessions, setSessions] = useState<ChatSession[]>(() => {
-    const loaded = loadSessions();
-    return loaded.length > 0 ? loaded : [createNewSession()];
-  });
-  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
-    const saved = localStorage.getItem(ACTIVE_SESSION_KEY);
-    const loaded = loadSessions();
-    if (saved && loaded.find(s => s.id === saved)) return saved;
-    return loaded[0]?.id || createNewSession().id;
-  });
-  const [showSessionList, setShowSessionList] = useState(false);
+  const { files, updateFileContent, saveFile, createFile, isAiFullscreen, setAiFullscreen } = useIdeStore();
+  const aiStore = useAiStore();
+  const activeProvider = aiStore.provider;
+  const currentProvider = PROVIDERS.find(p => p.id === activeProvider) || PROVIDERS[0];
+  const currentKey = aiStore.apiKey;
+  const selectedModel = aiStore.model;
+  const isAiLoading = aiStore.isLoading;
+
+  const { models: dynamicModels, isLoading: isModelsLoading } = useDynamicModels(activeProvider, currentKey);
   
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  
-  // Mention State
-  const [mentionQuery, setMentionQuery] = useState<{ active: boolean; text: string; startIdx: number }>({ active: false, text: '', startIdx: 0 });
+  const [showSessionList, setShowSessionList] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState({ active: false, text: '', startIdx: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Provider state
-  const [activeProvider, setActiveProvider] = useState<Provider>(() => {
-    return (localStorage.getItem('krypton-ai-provider') as Provider) || 'gemini';
-  });
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem('krypton-ai-keys') || '{}'); } catch { return {}; }
-  });
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem('krypton-ai-model') || 'gemini-2.0-flash';
-  });
+  const activeSession = aiStore.sessions.find(s => s.id === aiStore.activeSessionId) || aiStore.sessions[0];
+  const aiMessages = activeSession?.messages || [];
 
-  const currentProvider = PROVIDERS.find(p => p.id === activeProvider)!;
-  const currentKey = apiKeys[activeProvider] || '';
-  const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
-  const messages = activeSession?.messages || [];
+  useEffect(() => { 
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
+  }, [aiMessages, aiStore.streamingText]);
 
-  // Persist sessions whenever they change
-  useEffect(() => { saveSessions(sessions); }, [sessions]);
-  useEffect(() => { localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId); }, [activeSessionId]);
-
-  // Persist settings
-  useEffect(() => {
-    localStorage.setItem('krypton-ai-provider', activeProvider);
-    localStorage.setItem('krypton-ai-keys', JSON.stringify(apiKeys));
-    localStorage.setItem('krypton-ai-model', selectedModel);
-  }, [activeProvider, apiKeys, selectedModel]);
-
-  // Auto-scroll
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, streamingText]);
-
-  // Listen for "Send to Agent" events 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.text) {
-        setInput(detail.text);
-        setShowSettings(false);
-        setShowSessionList(false);
-        setTimeout(() => inputRef.current?.focus(), 100);
-      }
-    };
-    window.addEventListener('krypton-send-to-agent', handler);
-    return () => window.removeEventListener('krypton-send-to-agent', handler);
-  }, []);
-
-  const updateApiKey = (provider: Provider, key: string) => {
-    setApiKeys(prev => ({ ...prev, [provider]: key }));
-  };
-
-  const updateSessionMessages = useCallback((sessionId: string, newMessages: Message[]) => {
-    setSessions(prev => prev.map(s => {
-      if (s.id !== sessionId) return s;
-      const title = s.messages.length === 0 && newMessages.length > 0 
-        ? generateTitle(newMessages[0].content) 
-        : s.title;
-      return { ...s, messages: newMessages, title, updatedAt: Date.now() };
-    }));
-  }, []);
-
-  // ─── New / Delete / Switch session ─────────────────────
   const startNewSession = () => {
-    const session = createNewSession();
-    setSessions(prev => [session, ...prev]);
-    setActiveSessionId(session.id);
+    const id = aiStore.createNewSession();
+    aiStore.setActiveSession(id);
     setShowSessionList(false);
     setInput('');
   };
 
-  const deleteSession = (id: string) => {
-    setSessions(prev => {
-      const filtered = prev.filter(s => s.id !== id);
-      if (filtered.length === 0) {
-        const fresh = createNewSession();
-        setActiveSessionId(fresh.id);
-        return [fresh];
-      }
-      if (activeSessionId === id) setActiveSessionId(filtered[0].id);
-      return filtered;
-    });
-  };
-
-  // ─── Mention handling ──────────────────────────────────
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInput(val);
@@ -265,360 +130,202 @@ export function AiAssistant() {
     inputRef.current?.focus();
   };
 
-  const getMentionOptions = () => {
-    return Object.values(files)
-      .filter(f => f.type === 'file' && f.name.toLowerCase().includes(mentionQuery.text))
-      .slice(0, 8);
-  };
+  const getMentionOptions = () => Object.values(files).filter(f => f.type === 'file' && f.name.toLowerCase().includes(mentionQuery.text)).slice(0, 8);
 
-  const applyCode = (filename: string, content: string) => {
-    const fileEntry = Object.entries(files).find(([_, f]) => f.name === filename);
-    if (fileEntry) {
-      updateFileContent(fileEntry[0], content);
-      saveFile(fileEntry[0]);
-    } else {
-      const id = createFile(filename, 'root', 'file', content);
-      saveFile(id);
-    }
-  };
-
-  const renderMessageContent = (content: string, msg: Message) => {
-    const parts = content.split(/(<think>[\s\S]*?<\/think>|<edit file="[^"]+">[\s\S]*?<\/edit>)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('<think>')) {
-        const thoughtContent = part.replace(/^<think>/, '').replace(/<\/think>$/, '');
-        const duration = msg.completedAt ? msg.completedAt - msg.timestamp : undefined;
-        return <ThinkBlock key={i} content={thoughtContent} duration={duration} />;
-      }
-      if (part.startsWith('<edit file="')) {
-        const match = part.match(/<edit file="([^"]+)">([\s\S]*?)<\/edit>/);
-        if (match) {
-          const filename = match[1];
-          const code = match[2].trim();
-          return (
-            <div key={i} className="my-2 border border-[#30363d] rounded-lg overflow-hidden w-full max-w-full">
-              <div className="bg-[#21262d] px-3 py-1.5 text-xs font-mono text-gray-300 flex justify-between items-center">
-                <span className="truncate pr-2">{filename}</span>
-                <button onClick={() => applyCode(filename, code)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded shadow text-[10px] uppercase tracking-wider font-bold transition-colors">Apply</button>
-              </div>
-              <pre className="p-3 text-[11px] overflow-x-auto bg-[#0d1117] text-gray-300">{code}</pre>
-            </div>
-          );
-        }
-      }
-      // Render markdown code blocks
-      const rendered = part.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_m, _lang, code) => code);
-      return <span key={i} className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed break-words block">{rendered}</span>;
-    });
-  };
-
-  // ─── Send with streaming ───────────────────────────────
   const sendMessage = async () => {
-    if (!input.trim() || !currentKey) return;
-
-    // Build context
+    if (!input.trim() || (!aiStore.apiKey && aiStore.provider !== 'openrouter')) return;
+    
     const words = input.split(/\s+/);
     const mentions = words.filter(w => w.startsWith('@')).map(w => w.slice(1));
     let contextString = '';
     if (mentions.length > 0) {
       const taggedFiles = Object.values(files).filter(f => f.type === 'file' && mentions.includes(f.name));
       if (taggedFiles.length > 0) {
-        contextString = '\n\n<tagged_files>\n' + taggedFiles.map(f => `<file name="${f.name}">\n${f.content || ''}\n</file>`).join('\n') + '\n</tagged_files>\n';
+        contextString = '\n\n<tagged_files>\n' + taggedFiles.map(f => {
+          // Build full path for the file
+          const buildPath = (nodeId: string): string => {
+            const node = files[nodeId];
+            if (!node || !node.parentId || nodeId === 'root') return '';
+            const parentPath = buildPath(node.parentId);
+            return parentPath ? `${parentPath}/${node.name}` : node.name;
+          };
+          const fileId = Object.entries(files).find(([_, n]) => n === f)?.[0] || '';
+          const fullPath = fileId ? buildPath(fileId) : f.name;
+          return `<file path="${fullPath}">\n${f.content || ''}\n</file>`;
+        }).join('\n') + '\n</tagged_files>\n';
       }
     }
 
-    const fileTreeItems = Object.values(files)
-      .filter(f => f.type === 'file')
-      .map(f => `  - ${f.name}`)
+    // Build hierarchical file tree with paths
+    const buildPathForNode = (nodeId: string): string => {
+      const node = files[nodeId];
+      if (!node || !node.parentId || nodeId === 'root') return '';
+      const parentPath = buildPathForNode(node.parentId);
+      return parentPath ? `${parentPath}/${node.name}` : node.name;
+    };
+    const fileTreeItems = Object.entries(files)
+      .filter(([id, f]) => f.type === 'file' && id !== 'root')
+      .map(([id]) => `  - ${buildPathForNode(id)}`)
       .join('\n');
-    const projectTreeContext = `\n<project_file_tree>\n${fileTreeItems}\n</project_file_tree>\n`;
 
-    const finalSystemInstruction = SYSTEM_INSTRUCTION + projectTreeContext + contextString;
-    const userMessage: Message = { role: 'user', content: input, timestamp: Date.now() };
-    const newMessages = [...messages, userMessage];
-    updateSessionMessages(activeSessionId, newMessages);
+    // Include active file context if one is open
+    const activeFile = useIdeStore.getState().activeFileId;
+    let activeFileContext = '';
+    if (activeFile && files[activeFile]) {
+      const af = files[activeFile];
+      const afPath = buildPathForNode(activeFile);
+      activeFileContext = `\n<active_file path="${afPath}" language="${af.language || 'text'}" />\n`;
+    }
+    const systemContext = SYSTEM_INSTRUCTION + `\n<project_file_tree>\n${fileTreeItems}\n</project_file_tree>\n` + activeFileContext + contextString;
+
+    const currentInput = input;
     setInput('');
     setMentionQuery({ active: false, text: '', startIdx: 0 });
-    setIsLoading(true);
-    setStreamingText('');
 
-    // Abort controller for cancellation
-    pendingAbort = new AbortController();
-    const signal = pendingAbort.signal;
+    const prov = PROVIDERS.find(p => p.id === aiStore.provider);
+    aiStore.setBaseUrl(prov?.baseUrl || '');
 
-    try {
-      let assistantContent = '';
+    let sessionId = activeSession?.id;
+    if (!sessionId) {
+      sessionId = aiStore.createNewSession();
+    }
 
-      if (activeProvider === 'gemini') {
-        // Gemini: try streaming endpoint first
-        try {
-          const response = await fetch(
-            `${currentProvider.baseUrl}/models/${selectedModel}:streamGenerateContent?alt=sse&key=${currentKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              signal,
-              body: JSON.stringify({
-                contents: newMessages.map(m => ({
-                  role: m.role === 'assistant' ? 'model' : 'user',
-                  parts: [{ text: m.content }],
-                })),
-                systemInstruction: { parts: [{ text: finalSystemInstruction }] },
-              }),
-            }
+    await aiStore.sendMessage(sessionId, currentInput, systemContext);
+  }
+
+  const applyCode = (filename: string, content: string) => {
+    const fileEntry = Object.entries(files).find(([_, f]) => f.name === filename);
+    if (fileEntry) { updateFileContent(fileEntry[0], content); saveFile(fileEntry[0]); }
+    else { const id = createFile(filename, 'root', 'file', content); saveFile(id); }
+  };
+
+  const renderMessageContent = (content: string, msg: Message) => {
+    if (msg.role === 'tool') return <ToolResultBlock msg={msg} />;
+    
+    // Check if the message contains any of our special tags
+    const hasTags = content.includes('<ans>') || content.includes('<edit ') || content.includes('<plan>') || content.includes('<status>');
+    
+    // Fallback: If no tags are found, treat the whole message as a standard response
+    if (!hasTags) {
+      const rendered = content.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_m, _lang, code) => code);
+      return <span key="fallback" className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed break-words block">{rendered}</span>;
+    }
+
+    // Split by tags (ans, edit, plan, status) while preserving them
+    const rawParts = content.split(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|<ans>[\s\S]*?(?:<\/ans>|$)|<edit file="[^"]+">[\s\S]*?(?:<\/edit>|$)|<plan>[\s\S]*?(?:<\/plan>|$)|<status>[\s\S]*?(?:<\/status>|$))/g);
+    
+    // Merge adjacent reasoning parts to keep Thought blocks contiguous
+    const parts: string[] = [];
+    rawParts.forEach(p => {
+      if (!p) return;
+      const isTag = p.startsWith('<ans>') || p.startsWith('<edit ') || p.startsWith('<plan>') || p.startsWith('<status>');
+      const last = parts[parts.length - 1];
+      const lastIsTag = last && (last.startsWith('<ans>') || last.startsWith('<edit ') || last.startsWith('<plan>') || last.startsWith('<status>'));
+
+      if (isTag || !last || lastIsTag) {
+        parts.push(p);
+      } else {
+        parts[parts.length - 1] += p;
+      }
+    });
+
+    return parts.map((part, i) => {
+      if (!part || (part.trim() === '' && !part.startsWith('<ans>'))) return null;
+
+      if (part.startsWith('<ans>')) {
+        const ansContent = part.replace(/^<ans>/, '').replace(/<\/ans>$/, '');
+        const rendered = ansContent.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_m, _lang, code) => code);
+        return <span key={i} className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed break-words block mb-2">{rendered}</span>;
+      }
+
+      if (part.startsWith('<plan>')) {
+        const planContent = part.replace(/^<plan>/, '').replace(/<\/plan>$/, '');
+        return <PlanBlock key={i} content={planContent} />;
+      }
+
+      if (part.startsWith('<status>')) {
+        const statusContent = part.replace(/^<status>/, '').replace(/<\/status>$/, '');
+        return <StatusBlock key={i} content={statusContent} />;
+      }
+
+      if (part.startsWith('<edit file="')) {
+        const match = part.match(/<edit file="([^"]+)">([\s\S]*?)(?:<\/edit>|$)/);
+        if (match) {
+          const filename = match[1], code = match[2].trim();
+          const isClosed = part.includes('</edit>');
+          return (
+            <div key={i} className="my-2 border border-[#30363d] rounded-lg overflow-hidden w-full max-w-full">
+              <div className="bg-[#21262d] px-3 py-1.5 text-xs font-mono text-gray-300 flex justify-between items-center truncate">
+                <div className="flex items-center space-x-2 min-w-0"><FileCode size={14} className="text-blue-400" /><span className="truncate">{filename}</span></div>
+                {isClosed && (
+                  <button onClick={() => applyCode(filename, code)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 rounded h-6 text-[10px] font-bold uppercase transition-colors shrink-0">Apply</button>
+                )}
+              </div>
+              <pre className="p-3 text-[11px] overflow-x-auto bg-[#0d1117] text-gray-300 whitespace-pre-wrap">{code}</pre>
+            </div>
           );
-
-          if (response.ok && response.body) {
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let fullText = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              const chunk = decoder.decode(value, { stream: true });
-              // Parse SSE data lines
-              const lines = chunk.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const json = JSON.parse(line.slice(6));
-                    const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                    fullText += text;
-                    setStreamingText(fullText);
-                  } catch { /* skip non-JSON lines */ }
-                }
-              }
-            }
-            assistantContent = fullText;
-          } else {
-            // Fallback to non-streaming
-            const fallback = await fetch(
-              `${currentProvider.baseUrl}/models/${selectedModel}:generateContent?key=${currentKey}`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                signal,
-                body: JSON.stringify({
-                  contents: newMessages.map(m => ({
-                    role: m.role === 'assistant' ? 'model' : 'user',
-                    parts: [{ text: m.content }],
-                  })),
-                  systemInstruction: { parts: [{ text: finalSystemInstruction }] },
-                }),
-              }
-            );
-            const data = await fallback.json();
-            assistantContent = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
-          }
-        } catch (err: any) {
-          if (err.name === 'AbortError') { setIsLoading(false); return; }
-          throw err;
-        }
-      } else if (activeProvider === 'openai' || activeProvider === 'groq' || activeProvider === 'mistral' || activeProvider === 'openrouter') {
-        // OpenAI-compatible streaming
-        try {
-          const response = await fetch(`${currentProvider.baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${currentKey}`,
-            },
-            signal,
-            body: JSON.stringify({
-              model: selectedModel,
-              stream: true,
-              messages: [
-                { role: 'system', content: finalSystemInstruction },
-                ...newMessages.map(m => ({ role: m.role, content: m.content })),
-              ],
-              max_tokens: 4096,
-            }),
-          });
-
-          if (response.ok && response.body) {
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let fullText = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-                  try {
-                    const json = JSON.parse(line.slice(6));
-                    const delta = json.choices?.[0]?.delta?.content || '';
-                    fullText += delta;
-                    setStreamingText(fullText);
-                  } catch { /* skip */ }
-                }
-              }
-            }
-            assistantContent = fullText;
-          } else {
-            const data = await response.json();
-            assistantContent = data.choices?.[0]?.message?.content || data.error?.message || 'No response received.';
-          }
-        } catch (err: any) {
-          if (err.name === 'AbortError') { setIsLoading(false); return; }
-          throw err;
-        }
-      } else if (activeProvider === 'anthropic') {
-        // Anthropic streaming
-        try {
-          const response = await fetch(`${currentProvider.baseUrl}/messages`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': currentKey,
-              'anthropic-version': '2023-06-01',
-              'anthropic-dangerous-direct-browser-access': 'true',
-            },
-            signal,
-            body: JSON.stringify({
-              model: selectedModel,
-              stream: true,
-              max_tokens: 4096,
-              system: finalSystemInstruction,
-              messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-            }),
-          });
-
-          if (response.ok && response.body) {
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let fullText = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const json = JSON.parse(line.slice(6));
-                    if (json.type === 'content_block_delta') {
-                      fullText += json.delta?.text || '';
-                      setStreamingText(fullText);
-                    }
-                  } catch { /* skip */ }
-                }
-              }
-            }
-            assistantContent = fullText;
-          } else {
-            const data = await response.json();
-            assistantContent = data.content?.[0]?.text || data.error?.message || 'No response received.';
-          }
-        } catch (err: any) {
-          if (err.name === 'AbortError') { setIsLoading(false); return; }
-          throw err;
         }
       }
 
-      const finalMessages = [...newMessages, { role: 'assistant' as const, content: assistantContent, timestamp: userMessage.timestamp, completedAt: Date.now() }];
-      updateSessionMessages(activeSessionId, finalMessages);
-    } catch (error: any) {
-      const errorMessages = [...newMessages, { role: 'assistant' as const, content: `Error: ${error.message}`, timestamp: userMessage.timestamp, completedAt: Date.now() }];
-      updateSessionMessages(activeSessionId, errorMessages);
-    }
-
-    setIsLoading(false);
-    setStreamingText('');
-    pendingAbort = null;
+      // Default: Consider everything else as "Thinking"
+      const duration = msg.completedAt ? msg.completedAt - msg.timestamp : undefined;
+      return <ThinkBlock key={i} content={part} duration={duration} />;
+    });
   };
 
-  // ─── Session List View ─────────────────────────────────
-  if (showSessionList) {
+  if (!aiStore.apiKey && aiStore.provider !== 'openrouter' && !showSettings) {
     return (
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#21262d] flex-shrink-0">
-          <h3 className="text-sm font-semibold text-white">Chat History</h3>
-          <div className="flex items-center space-x-1">
-            <button onClick={startNewSession} className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-white/10" title="New Chat">
-              <Plus size={16} />
-            </button>
-            <button onClick={() => setShowSessionList(false)} className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-white/10">
-              <X size={16} />
-            </button>
-          </div>
+      <div className="flex flex-col items-center justify-center h-full p-10 text-center space-y-8 bg-[#1e1e1e]">
+        <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-2xl shadow-blue-500/20 animate-pulse">
+          <Sparkles size={48} className="text-white" />
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {sessions.sort((a, b) => b.updatedAt - a.updatedAt).map(session => (
-            <div 
-              key={session.id}
-              className={`flex items-center justify-between px-4 py-3 border-b border-[#21262d]/50 cursor-pointer transition-colors ${
-                session.id === activeSessionId ? 'bg-blue-600/10 border-l-2 border-l-blue-500' : 'hover:bg-white/5'
-              }`}
-              onClick={() => { setActiveSessionId(session.id); setShowSessionList(false); }}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white truncate">{session.title}</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">
-                  {session.messages.length} messages · {new Date(session.updatedAt).toLocaleDateString()}
-                </p>
-              </div>
-              <button 
-                onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}
-                className="p-1.5 text-gray-600 hover:text-red-400 rounded hover:bg-red-500/10 ml-2 flex-shrink-0"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-white tracking-tight border-b border-white/10 pb-2 inline-block">Sedna Elite</h3>
+          <p className="text-sm text-gray-400 max-w-[240px] leading-relaxed">
+            Unleash the full power of agentic coding assistance. Connect your Sednium API keys to begin.
+          </p>
         </div>
-      </div>
-    );
-  }
-
-  // ─── No API key ────────────────────────────────────────
-  if (!currentKey && !showSettings) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/20 flex items-center justify-center mb-4">
-          <Sparkles size={24} className="text-blue-400" />
-        </div>
-        <h3 className="text-lg font-semibold text-white mb-2">Luminous Agent</h3>
-        <p className="text-sm text-gray-500 mb-4 max-w-xs">
-          Configure an API key to start using AI coding assistance.
-        </p>
         <button 
           onClick={() => setShowSettings(true)}
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-lg shadow-blue-600/20"
+          className="flex items-center space-x-2 bg-white text-black hover:bg-gray-200 active:scale-95 px-6 py-3 rounded-2xl text-sm font-bold transition-all shadow-xl shadow-white/5"
         >
-          <Key size={16} />
-          <span>Configure API Keys</span>
+          <Key size={18} />
+          <span>Setup Connection</span>
         </button>
       </div>
     );
   }
 
-  // ─── Settings ──────────────────────────────────────────
+  // Settings panel
   if (showSettings) {
     return (
-      <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#21262d]">
-          <h3 className="text-sm font-semibold text-white">Luminous Configuration</h3>
-          <button onClick={() => setShowSettings(false)} className="p-1 text-gray-500 hover:text-white rounded hover:bg-white/10">
-            <X size={16} />
+      <div className="flex h-full flex-col bg-[#1e1e1e]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2d2d2d]">
+          <div className="flex items-center space-x-2">
+            <Bot size={18} className="text-blue-500" />
+            <h3 className="text-sm font-bold text-white uppercase tracking-widest">Connect</h3>
+          </div>
+          <button onClick={() => setShowSettings(false)} className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+            <X size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
           <div>
-            <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">Provider</label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <label className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-3 block">Infrastructure Provider</label>
+            <div className="grid grid-cols-2 gap-2">
               {PROVIDERS.map(provider => (
                 <button
                   key={provider.id}
-                  onClick={() => { setActiveProvider(provider.id); setSelectedModel(provider.defaultModel); }}
-                  className={`px-3 py-2 rounded-lg text-xs text-left transition-all ${
+                  onClick={() => {
+                    aiStore.setProvider(provider.id);
+                    aiStore.setModel(provider.defaultModel);
+                    aiStore.setBaseUrl(provider.baseUrl);
+                  }}
+                  className={`px-3 py-2.5 rounded-xl text-xs text-center border transition-all duration-200 ${
                     activeProvider === provider.id
-                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-medium'
-                      : 'bg-[#161b22] text-gray-400 border border-[#30363d] hover:bg-[#21262d] hover:text-white'
+                      ? 'bg-blue-600/10 text-blue-400 border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
+                      : 'bg-[#161b22] text-gray-500 border-[#30363d] hover:border-gray-500'
                   }`}
                 >
                   {provider.name}
@@ -626,75 +333,134 @@ export function AiAssistant() {
               ))}
             </div>
           </div>
-          <div>
-            <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">{currentProvider.name} API Key</label>
-            <input
-              type="password"
-              value={currentKey}
-              onChange={(e) => updateApiKey(activeProvider, e.target.value)}
-              placeholder={currentProvider.placeholder}
-              className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">Model</label>
-            <input
-              type="text"
-              list={`models-${activeProvider}`}
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none placeholder-gray-600"
-              placeholder="Select or type model name..."
-            />
-            <datalist id={`models-${activeProvider}`}>
-              {currentProvider.models.map(model => (
-                <option key={model} value={model} />
-              ))}
-            </datalist>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2 block">Secret Key</label>
+              <input
+                type="text"
+                value={currentKey}
+                onChange={(e) => aiStore.setApiKey(e.target.value)}
+                placeholder={currentProvider.placeholder}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-700 focus:border-blue-500/50 focus:outline-none transition-all"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] block">Deployment Model</label>
+                {isModelsLoading && <Loader2 size={12} className="animate-spin text-blue-500" />}
+              </div>
+              <input
+                type="text"
+                list={`models-${activeProvider}`}
+                value={selectedModel}
+                onChange={(e) => aiStore.setModel(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded-xl px-4 py-3 text-sm text-white placeholder-gray-700 focus:border-blue-500/50 focus:outline-none transition-all"
+                placeholder="Model ID..."
+              />
+              <datalist id={`models-${activeProvider}`}>
+                {dynamicModels.map(m => (
+                  <option key={m.id} value={m.id}>{m.id}</option>
+                ))}
+              </datalist>
+            </div>
           </div>
         </div>
-        <div className="px-4 py-3 border-t border-[#21262d]">
-          <button onClick={() => setShowSettings(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">
-            Save & Close
+
+        <div className="px-5 py-5 border-t border-[#2d2d2d] bg-[#1a1a1a]">
+          <button 
+            onClick={() => setShowSettings(false)}
+            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 text-white py-3.5 rounded-2xl text-sm font-bold transition-all shadow-lg shadow-blue-600/20"
+          >
+            Authenticate Link
           </button>
         </div>
       </div>
     );
   }
 
-  // ─── Chat View ─────────────────────────────────────────
+  // Chat view
   return (
-    <div className="flex h-full flex-col relative w-full overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[#21262d] flex-shrink-0">
-        <div className="flex items-center space-x-2 min-w-0">
-          <button onClick={() => setShowSessionList(true)} className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-white/10 flex-shrink-0" title="Chat History">
-            <MessageSquare size={14} />
-          </button>
-          <span className="text-xs text-gray-400 truncate">{activeSession?.title}</span>
+    <div className="flex h-full flex-col relative w-full overflow-hidden bg-[#212121]">
+      {/* Chat header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-white/5 flex-shrink-0 bg-[#212121] z-30">
+        <div className="flex items-center space-x-3">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Sedna</span>
+            <span className="text-[9px] text-gray-500 border border-white/10 rounded px-1">{selectedModel}</span>
+          </div>
         </div>
-        <div className="flex items-center space-x-1 flex-shrink-0">
-          <button onClick={startNewSession} className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-white/10" title="New Chat">
-            <Plus size={14} />
+        <div className="flex items-center space-x-1">
+          <button onClick={() => setAiFullscreen(!isAiFullscreen)} className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/5 transition-all">
+            {isAiFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
           </button>
-          <button onClick={() => setShowSettings(true)} className="p-1.5 text-gray-500 hover:text-white rounded hover:bg-white/10">
-            <Key size={14} />
+          <button onClick={() => setShowSessionList(!showSessionList)} className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/5 transition-all">
+            <MessageSquare size={16} />
+          </button>
+          <button onClick={() => setShowSettings(true)} className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/5 transition-all">
+            <Key size={16} />
           </button>
         </div>
       </div>
 
+      {/* Session list overlay */}
+      {showSessionList && (
+        <div className="absolute inset-x-0 top-[52px] bottom-0 bg-[#212121] z-[45] flex flex-col border-r border-white/5 animate-slide-in-right">
+          <div className="p-4 border-b border-white/5 flex items-center justify-between">
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Conversations</span>
+            <button onClick={startNewSession} className="p-1.5 bg-blue-600 rounded-lg text-white hover:bg-blue-500">
+              <Plus size={14} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {aiStore.sessions.map(session => (
+              <div key={session.id} className="flex items-center group">
+                <button
+                  onClick={() => {
+                    aiStore.setActiveSession(session.id);
+                    setShowSessionList(false);
+                  }}
+                  className={`flex-1 text-left px-3 py-3 rounded-xl text-xs transition-all ${
+                    aiStore.activeSessionId === session.id
+                      ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20'
+                      : 'text-gray-400 hover:bg-white/5'
+                  }`}
+                >
+                  <div className="font-medium truncate">
+                    {session.messages[session.messages.length - 1]?.content.slice(0, 30) || 'New Conversation'}
+                  </div>
+                  <div className="text-[9px] opacity-50 mt-1">{new Date(session.id).toLocaleString()}</div>
+                </button>
+                <button 
+                  onClick={() => aiStore.deleteSession(session.id)}
+                  className="p-2 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-4">
-        {messages.length === 0 && !streamingText && (
-          <div className="text-center py-8">
-            <Sparkles size={24} className="mx-auto mb-3 text-blue-400/50" />
-            <p className="text-sm text-gray-500">Tag a file using @ to provide context</p>
-            <div className="mt-4 space-y-1.5">
-              {['@App.jsx optimize this', 'Fix bugs in @index.css', 'How do I use hooks?'].map(suggestion => (
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth pb-24">
+        {aiMessages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-center py-10 px-6">
+            <div className="w-16 h-16 rounded-[1.5rem] bg-gradient-to-tr from-[#2d2d2d] to-[#3d3d3d] flex items-center justify-center mb-6">
+               <Bot size={32} className="text-blue-500/30" />
+            </div>
+            <p className="text-sm text-gray-500 leading-relaxed max-w-[200px]">
+              Krypton's agentic core is online. Tag context with <span className="text-blue-400 font-mono">@</span>.
+            </p>
+            <div className="mt-8 grid grid-cols-1 gap-2 w-full">
+              {['@App.tsx fix the layout', 'Optimize @index.css', 'Create a new utility file'].map(suggestion => (
                 <button 
                   key={suggestion}
                   onClick={() => setInput(suggestion)}
-                  className="block w-full text-left px-3 py-2 text-xs text-gray-400 bg-[#161b22] rounded-lg hover:bg-[#21262d] hover:text-white transition-colors"
+                  className="text-left px-4 py-3 text-[11px] font-medium text-gray-400 bg-white/5 rounded-2xl hover:bg-white/10 hover:text-white transition-all border border-white/5"
                 >
                   {suggestion}
                 </button>
@@ -702,81 +468,104 @@ export function AiAssistant() {
             </div>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
-            <div className={`max-w-[95%] rounded-2xl px-3.5 py-2.5 text-sm ${
+        {aiMessages.filter(m => m.role !== 'system').map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full animate-fade-in`}>
+            <div className={`max-w-[100%] rounded-2xl px-4 py-3 ${
               msg.role === 'user' 
-                ? 'bg-blue-600 text-white rounded-br-md block' 
-                : 'bg-[#161b22] text-gray-200 border border-[#21262d] rounded-bl-md w-full overflow-hidden'
+                ? 'bg-blue-600 text-white rounded-br-none shadow-lg shadow-blue-900/20' 
+                : msg.role === 'tool'
+                  ? 'bg-transparent w-full px-0 py-0'
+                  : 'bg-[#2d2d2d] text-gray-200 border border-white/5 rounded-bl-none w-full shadow-xl'
             }`}>
-              {msg.role === 'assistant' ? renderMessageContent(msg.content, msg) : (
-                <pre className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed break-words">{msg.content}</pre>
+              {msg.role !== 'user' ? renderMessageContent(msg.content, msg) : (
+                <div className="whitespace-pre-wrap font-sans text-[13.5px] leading-relaxed break-words">{msg.content}</div>
               )}
             </div>
           </div>
         ))}
-        {/* Streaming indicator */}
-        {isLoading && (
-          <div className="flex justify-start w-full">
-            <div className="bg-[#161b22] border border-[#21262d] rounded-2xl rounded-bl-md px-4 py-3 w-full overflow-hidden">
-              {streamingText ? (
-                <span className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed break-words text-gray-200 block">{streamingText}<span className="inline-block w-1.5 h-4 bg-blue-400 ml-0.5 animate-pulse" /></span>
-              ) : (
-                <Loader2 size={16} className="animate-spin text-blue-400" />
-              )}
-            </div>
+        {isAiLoading && (
+          <div className="flex justify-start w-full animate-fade-in pb-4">
+            {aiStore.streamingText ? (
+              <div className="max-w-[100%] rounded-2xl px-4 py-3 bg-[#161b22]/50 border border-blue-500/20 shadow-lg shadow-blue-500/5 backdrop-blur-sm">
+                {renderMessageContent(aiStore.streamingText, { 
+                  role: 'assistant', 
+                  content: aiStore.streamingText,
+                  timestamp: Date.now() 
+                } as any)}
+              </div>
+            ) : (
+              <div className="bg-[#2d2d2d] border border-white/5 rounded-2xl px-5 py-4 flex items-center space-x-3 shadow-lg">
+                <Loader2 size={16} className="animate-spin text-blue-500" />
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Initial Connection...</span>
+              </div>
+            )}
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Mention Menu */}
+      {/* Mention Auto-Complete Menu */}
       {mentionQuery.active && getMentionOptions().length > 0 && (
-        <div className="absolute bottom-[4.5rem] left-2 right-2 bg-[#2d2d2d] border border-[#3c3c3c] rounded-xl shadow-2xl py-1 z-50">
-          <div className="px-3 py-1.5 border-b border-[#3c3c3c] text-[10px] text-gray-400 uppercase tracking-widest font-semibold font-mono">
-            Tag Context Match
+        <div className="absolute bottom-[4.5rem] left-4 right-4 bg-[#2d2d2d] border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] py-2 z-50 animate-scale-in">
+          <div className="px-4 py-2 border-b border-white/5 text-[9px] text-gray-500 uppercase tracking-[0.2em] font-black">
+            Available File Context
           </div>
-          <div className="max-h-40 overflow-y-auto">
+          <div className="max-h-48 overflow-y-auto">
             {getMentionOptions().map(f => (
               <button 
                 key={f.name}
                 onClick={() => insertMention(f.name)}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-blue-600/30 hover:text-white transition-colors"
+                className="w-full text-left px-4 py-3 text-xs text-gray-300 hover:bg-blue-600 hover:text-white transition-all flex items-center space-x-3 group"
               >
-                @{f.name}
+                <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/20">
+                  <FileCode size={12} className="text-blue-400 group-hover:text-white" />
+                </div>
+                <span>{f.name}</span>
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Input */}
-      <div className="flex items-center space-x-2 p-3 border-t border-[#21262d] flex-shrink-0 bg-[#1e1e1e] relative z-40">
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={handleInput}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              if (mentionQuery.active && getMentionOptions().length > 0) {
-                e.preventDefault();
-                insertMention(getMentionOptions()[0].name);
-              } else {
-                sendMessage();
+      {/* Input Section */}
+      <div className="p-4 border-t border-white/5 flex-shrink-0 bg-[#212121] z-40 relative">
+        <div className="flex items-center space-x-2 bg-[#0d1117] border border-white/10 rounded-2xl px-4 focus-within:border-blue-500/50 transition-all shadow-inner shadow-black/40">
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={handleInput}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                if (mentionQuery.active && getMentionOptions().length > 0) {
+                  e.preventDefault();
+                  insertMention(getMentionOptions()[0].name);
+                } else if (!isAiLoading) {
+                  sendMessage();
+                }
               }
-            }
-          }}
-          placeholder="Ask Luminous..."
-          className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-xl py-2.5 px-4 text-sm text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none"
-        />
-        <button
-          onClick={isLoading ? () => { pendingAbort?.abort(); setIsLoading(false); setStreamingText(''); } : sendMessage}
-          disabled={!isLoading && (!input.trim() || !currentKey)}
-          className={`p-2.5 ${isLoading ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'} disabled:opacity-40 disabled:hover:bg-blue-600 text-white rounded-xl transition-colors flex-shrink-0`}
-        >
-          {isLoading ? <X size={16} /> : <Send size={16} />}
-        </button>
+            }}
+            placeholder="Build something incredible..."
+            className="flex-1 bg-transparent py-4 text-sm text-white placeholder-gray-700 focus:outline-none"
+          />
+          {isAiLoading ? (
+            <button
+              onClick={() => aiStore.abortChat()}
+              className="p-2.5 bg-red-600 text-white hover:bg-red-500 rounded-xl transition-all flex-shrink-0 active:scale-90 shadow-lg shadow-red-900/20"
+              title="Stop Generation"
+            >
+              <Square size={16} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              onClick={sendMessage}
+              disabled={!input.trim() || (!currentKey && aiStore.provider !== 'openrouter')}
+              className="p-2.5 bg-white text-black hover:bg-gray-200 disabled:opacity-20 disabled:hover:bg-white rounded-xl transition-all flex-shrink-0 active:scale-90"
+            >
+              <Send size={16} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

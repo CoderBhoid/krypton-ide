@@ -205,7 +205,7 @@ export class ShellEngine {
 
     // Special: code execution commands
     if (command === 'node' || command === 'python' || command === 'run') {
-      return this.executeCodeCommand(command, args);
+      return this.executeCodeCommand(command, args, flags);
     }
 
     const handler = this.commands[command];
@@ -285,7 +285,7 @@ export class ShellEngine {
     }
   }
 
-  private async executeCodeCommand(command: string, args: string[]): Promise<ShellOutput> {
+  private async executeCodeCommand(command: string, args: string[], flags: Record<string, any> = {}): Promise<ShellOutput> {
     let code = '';
     let language = '';
     let filename = '';
@@ -319,7 +319,9 @@ export class ShellEngine {
     if (command === 'python') language = 'python';
 
     try {
-      const result = await executeCode(code, language, filename);
+      const store = useIdeStore.getState();
+      const target = (flags['target'] as string) || store.runTarget;
+      const result = await executeCode(language, code, filename, target);
       let output = '';
       if (result.output) output += result.output;
       if (result.stderr) output += (output ? '\n' : '') + result.stderr;

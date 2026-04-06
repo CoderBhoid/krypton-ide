@@ -8,10 +8,11 @@ import { LivePreview } from '../preview/LivePreview';
 import { CommandPalette } from '../CommandPalette';
 import { SettingsPanel } from '../sidebar/SettingsPanel';
 import { ExtensionsPanel } from '../sidebar/ExtensionsPanel';
+import { AiAssistant } from '../sidebar/AiAssistant';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
-import { ArrowLeft, Play, Upload, Download, Files, TerminalSquare, Puzzle, Bot, Settings, ChevronLeft, Menu } from 'lucide-react';
+import { ArrowLeft, Play, Upload, Download, Files, TerminalSquare, Puzzle, Bot, Settings, ChevronLeft, Menu, GitBranch } from 'lucide-react';
 import JSZip from 'jszip';
 import { StatusBar as CapacitorStatusBar } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
@@ -21,7 +22,7 @@ interface IdeLayoutProps {
 }
 
 export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
-  const { isSidebarOpen, toggleSidebar, sidebarView, setSidebarView, isPreviewOpen, setPreviewOpen, isCommandPaletteOpen, setCommandPaletteOpen, files, saveFile, activeFileId, createFile, openFile, loadProject, isGlassmorphismEnabled } = useIdeStore();
+  const { isSidebarOpen, toggleSidebar, sidebarView, setSidebarView, isPreviewOpen, setPreviewOpen, isCommandPaletteOpen, setCommandPaletteOpen, files, saveFile, activeFileId, createFile, openFile, loadProject, isAiFullscreen, setAiFullscreen } = useIdeStore();
   const { currentProjectId, projects } = useProjectsStore();
   const [terminalHeight, setTerminalHeight] = useState(200);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
@@ -98,22 +99,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
     };
   }, []);
 
-  // Handle Fullscreen toggle
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-    const updateStatusBar = async () => {
-      try {
-        if (useIdeStore.getState().isFullscreen) {
-          await CapacitorStatusBar.hide();
-        } else {
-          await CapacitorStatusBar.show();
-        }
-      } catch (e) {
-        console.warn('StatusBar toggling not supported:', e);
-      }
-    };
-    updateStatusBar();
-  }, [useIdeStore.getState().isFullscreen]);
+
 
   const handleRun = useCallback(() => {
     setPreviewOpen(true);
@@ -207,14 +193,10 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
     <div className="flex h-full w-full flex-col bg-white dark:bg-[#1e1e1e] overflow-hidden">
       {/* Top Bar with notch (safe-area) handling on mobile */}
       <div 
-        className={`flex h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-9 items-center justify-between px-2 text-[13px] flex-shrink-0 z-20 ${
-          isGlassmorphismEnabled
-            ? 'glass-panel border-b border-gray-200 dark:border-white/5'
-            : 'bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a]'
-        }`} 
+        className="flex h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-9 items-center justify-between px-2 text-[13px] flex-shrink-0 z-20 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a]"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1 min-w-0 flex-1 md:flex-none">
           {/* Mobile: Back + Menu */}
           <button className="p-2 md:hidden hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 mt-1" onClick={onBackToProjects}>
             <ArrowLeft size={20} />
@@ -222,9 +204,16 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           <button className="p-2 md:p-1 md:hidden hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 mt-1" onClick={toggleSidebar}>
             <Menu size={20} />
           </button>
+
+          {/* Project Name (Mobile & Desktop) */}
+          <div className="flex items-center px-2 py-1 max-w-[150px] md:max-w-[200px] mt-1 md:mt-0">
+            <span className="text-[14px] md:text-[13px] font-bold text-gray-900 dark:text-white truncate">
+              {currentProject?.name || 'Krypton'}
+            </span>
+          </div>
           
           {/* Desktop menu */}
-          <div className="hidden md:flex space-x-0.5 ml-1">
+          <div className="hidden md:flex items-center space-x-0.5 ml-1">
             <button className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" onClick={onBackToProjects} title="Back to Projects">
               <ArrowLeft size={16} />
             </button>
@@ -274,13 +263,12 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
             <button className="px-2 py-0.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" onClick={handleToggleTerminal}>Terminal</button>
           </div>
         </div>
-        {/* Project name centered */}
-        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 text-center text-[12px] font-semibold text-gray-500 dark:text-gray-400 flex items-center justify-center pointer-events-none max-w-[30%]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-          <span className="truncate">{currentProject?.name || 'Krypton'}</span>
-        </div>
 
-        {/* Right side actions — just the Run button, no three dots */}
+        {/* Right side actions */}
         <div className="flex items-center space-x-1 mt-1 md:mt-0">
+          <button onClick={handleToggleTerminal} className="md:hidden p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 transition-colors" title="Toggle Terminal">
+            <TerminalSquare size={20} />
+          </button>
           <button onClick={handleRun} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white px-4 py-2 md:px-2.5 md:py-1 rounded-lg text-sm md:text-xs font-semibold transition-all duration-200 shadow-lg shadow-emerald-900/40 active:scale-95">
             <Play size={16} fill="currentColor" />
             <span>Run</span>
@@ -324,7 +312,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
         {/* Sidebar */}
         {isSidebarOpen && (
           <>
-            <div className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-fade-in" onClick={toggleSidebar} />
+            <div className="md:hidden fixed inset-0 bg-black/60 z-40 animate-fade-in" onClick={toggleSidebar} />
             <div className="fixed md:static inset-y-0 left-0 z-50 w-[85%] max-w-[300px] border-r shadow-2xl md:shadow-none animate-slide-right md:animate-none flex flex-col flex-shrink-0" style={{ background: 'var(--ide-sidebar, #252526)', borderColor: 'var(--ide-border, #1a1a1a)' }}>
               <Sidebar />
             </div>
@@ -349,15 +337,12 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
         </div>
       </div>
       
-      {/* Mobile Bottom Nav — removed Search, Settings/Extensions open fullscreen */}
       <div 
-        className={`md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 ${
-          isGlassmorphismEnabled ? 'glass-panel border-t border-gray-200 dark:border-white/5' : 'bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]'
-        }`} 
+        className="md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
       >
         <NavButton icon={<Files size={19} />} label="Files" active={sidebarView === 'explorer' && isSidebarOpen} onClick={() => setSidebarView('explorer')} />
-        <NavButton icon={<TerminalSquare size={19} />} label="Terminal" active={isTerminalOpen} onClick={handleToggleTerminal} />
+        <NavButton icon={<GitBranch size={19} />} label="Git" active={sidebarView === 'git' && isSidebarOpen} onClick={() => setSidebarView('git')} />
         <NavButton icon={<Puzzle size={19} />} label="Extend" active={showExtensions} onClick={handleNavExtensions} />
         <NavButton icon={<Bot size={19} />} label="AI" active={sidebarView === 'ai' && isSidebarOpen} onClick={() => setSidebarView('ai')} />
         <NavButton icon={<Settings size={19} />} label="More" active={showSettings} onClick={handleNavSettings} />
@@ -380,9 +365,12 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
       {/* Fullscreen Settings Overlay */}
       {showSettings && (
-        <div className={`fixed inset-0 z-[60] flex flex-col animate-overlay-up ${isGlassmorphismEnabled ? 'glass-panel' : 'bg-white dark:bg-[#1e1e1e]'}`}>
-          <div className="flex items-center h-12 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a] px-2 flex-shrink-0">
-            <button onClick={() => setShowSettings(false)} className="p-2 text-gray-700 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg mr-1">
+        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e]">
+          <div 
+            className="flex items-center bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a] px-2 flex-shrink-0"
+            style={{ height: 'calc(3rem + env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}
+          >
+            <button onClick={() => setShowSettings(false)} className="p-2 text-gray-700 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg mr-1 mt-1">
               <ChevronLeft size={22} />
             </button>
             <h2 className="text-gray-900 dark:text-white font-semibold text-sm flex-1">Settings</h2>
@@ -392,11 +380,11 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           {/* Nav bar in settings */}
           <div 
-            className={`md:hidden flex justify-around items-center flex-shrink-0 z-30 ${isGlassmorphismEnabled ? 'glass-panel border-t border-gray-200 dark:border-white/5' : 'bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]'}`}
+            className="md:hidden flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
           >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowSettings(false); setSidebarView('explorer'); }} />
-            <NavButton icon={<TerminalSquare size={19} />} label="Terminal" active={false} onClick={() => { setShowSettings(false); handleToggleTerminal(); }} />
+            <NavButton icon={<GitBranch size={19} />} label="Git" active={false} onClick={() => { setShowSettings(false); setSidebarView('git'); }} />
             <NavButton icon={<Puzzle size={19} />} label="Extend" active={false} onClick={() => { setShowSettings(false); handleNavExtensions(); }} />
             <NavButton icon={<Bot size={19} />} label="AI" active={false} onClick={() => { setShowSettings(false); setSidebarView('ai'); }} />
             <NavButton icon={<Settings size={19} />} label="More" active={true} onClick={() => {}} />
@@ -406,9 +394,12 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
       {/* Fullscreen Extensions Overlay */}
       {showExtensions && (
-        <div className={`fixed inset-0 z-[60] flex flex-col animate-overlay-up ${isGlassmorphismEnabled ? 'glass-panel' : 'bg-white dark:bg-[#1e1e1e]'}`}>
-          <div className="flex items-center h-12 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a] px-2 flex-shrink-0">
-            <button onClick={() => setShowExtensions(false)} className="p-2 text-gray-700 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg mr-1">
+        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e]">
+          <div 
+            className="flex items-center bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a] px-2 flex-shrink-0"
+            style={{ height: 'calc(3rem + env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}
+          >
+            <button onClick={() => setShowExtensions(false)} className="p-2 text-gray-700 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg mr-1 mt-1">
               <ChevronLeft size={22} />
             </button>
             <h2 className="text-gray-900 dark:text-white font-semibold text-sm flex-1">Extensions</h2>
@@ -418,11 +409,11 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           {/* Nav bar in extensions */}
           <div 
-            className={`md:hidden flex justify-around items-center flex-shrink-0 z-30 ${isGlassmorphismEnabled ? 'glass-panel border-t border-gray-200 dark:border-white/5' : 'bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]'}`}
+            className="md:hidden flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
           >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowExtensions(false); setSidebarView('explorer'); }} />
-            <NavButton icon={<TerminalSquare size={19} />} label="Terminal" active={false} onClick={() => { setShowExtensions(false); handleToggleTerminal(); }} />
+            <NavButton icon={<GitBranch size={19} />} label="Git" active={false} onClick={() => { setShowExtensions(false); setSidebarView('git'); }} />
             <NavButton icon={<Puzzle size={19} />} label="Extend" active={true} onClick={() => {}} />
             <NavButton icon={<Bot size={19} />} label="AI" active={false} onClick={() => { setShowExtensions(false); setSidebarView('ai'); }} />
             <NavButton icon={<Settings size={19} />} label="More" active={false} onClick={() => { setShowExtensions(false); handleNavSettings(); }} />
@@ -430,9 +421,34 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
         </div>
       )}
 
+      {/* Fullscreen AI Overlay */}
+      {isAiFullscreen && (
+        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e]">
+          {/* We don't need a top header since AiAssistant has its own header, but we need safe-area padding if mobile */}
+          <div className="pt-[env(safe-area-inset-top,0px)] bg-[#212121] flex-shrink-0" />
+          <div className="flex-1 overflow-hidden relative border-t border-b border-gray-200 dark:border-[#1a1a1a]">
+            <AiAssistant />
+          </div>
+          {/* Nav bar in AI fullscreen */}
+          <div 
+            className="md:hidden flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
+          >
+            <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setAiFullscreen(false); setSidebarView('explorer'); }} />
+            <NavButton icon={<GitBranch size={19} />} label="Git" active={false} onClick={() => { setAiFullscreen(false); setSidebarView('git'); }} />
+            <NavButton icon={<Puzzle size={19} />} label="Extend" active={false} onClick={() => { setAiFullscreen(false); handleNavExtensions(); }} />
+            <NavButton icon={<Bot size={19} />} label="AI" active={true} onClick={() => {}} />
+            <NavButton icon={<Settings size={19} />} label="More" active={false} onClick={() => { setAiFullscreen(false); handleNavSettings(); }} />
+          </div>
+        </div>
+      )}
+
       {/* Save Toast */}
       {showSaveToast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 bg-[#333] text-white text-sm px-4 py-2 rounded-lg shadow-xl z-[70] animate-fade-in flex items-center space-x-2">
+        <div 
+          className="fixed left-1/2 -translate-x-1/2 bg-[#333] text-white text-sm px-4 py-2 rounded-lg shadow-xl z-[70] animate-fade-in flex items-center space-x-2"
+          style={{ top: 'calc(4rem + env(safe-area-inset-top, 0px))' }}
+        >
           <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
           <span>Saved</span>
         </div>

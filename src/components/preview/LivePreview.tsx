@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, RefreshCw, ExternalLink, Loader2, CheckCircle2, XCircle, Terminal as TerminalIcon } from 'lucide-react';
+import { X, RefreshCw, ExternalLink, Loader2, CheckCircle2, XCircle, Terminal as TerminalIcon, Package } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
+import { useProjectsStore } from '../../store/useProjectsStore';
 import { executeCode, canExecuteLanguage } from '../../lib/codeRunner';
 import type { ExecutionResult } from '../../lib/codeRunner';
 
@@ -10,9 +11,12 @@ interface LivePreviewProps {
 
 export function LivePreview({ onClose }: LivePreviewProps) {
   const { files, activeFileId } = useIdeStore();
+  const { currentProjectId, projects } = useProjectsStore();
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<{ type: string; args: string }[]>([]);
+  
+  const project = currentProjectId ? projects[currentProjectId] : null;
 
   // Listen for console messages from iframe
   useEffect(() => {
@@ -44,8 +48,15 @@ export function LivePreview({ onClose }: LivePreviewProps) {
   const isMarkdownPreview = activeFile?.type === 'file' && (activeFile.name.endsWith('.md') || activeFile.language === 'markdown');
 
   const isSvgPreview = activeFile?.type === 'file' && activeFile.name.endsWith('.svg');
+  
+  const isAndroidCode = useMemo(() => {
+    if (!activeFile?.content) return false;
+    return activeFile.content.includes('import android.') || 
+           activeFile.content.includes('import androidx.') ||
+           project?.template?.startsWith('android-');
+  }, [activeFile?.content, project?.template]);
 
-  const isCodeExecution = !hasHtmlFile && !hasReactProject && !isMarkdownPreview && !isSvgPreview && activeFile?.type === 'file' && activeFile.language && activeFile.language !== 'html' && activeFile.language !== 'xml';
+  const isCodeExecution = !hasHtmlFile && !hasReactProject && !isMarkdownPreview && !isSvgPreview && activeFile?.type === 'file' && activeFile.language && activeFile.language !== 'html' && activeFile.language !== 'xml' && !isAndroidCode;
 
   // For HTML projects, build the preview
   const previewSrc = useMemo(() => {
@@ -126,7 +137,7 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     setIsExecuting(true);
     setExecutionResult(null);
     
-    const result = await executeCode(activeFile.content, activeFile.language, activeFile.name);
+    const result = await executeCode(activeFile.language, activeFile.content, activeFile.name);
     setExecutionResult(result);
     setIsExecuting(false);
   };
@@ -337,6 +348,58 @@ export function LivePreview({ onClose }: LivePreviewProps) {
             sandbox="allow-scripts"
             className="w-full h-full border-none"
           />
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Android Code View (Specific Error/Guide) ───
+  if (isAndroidCode) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0d1117] flex flex-col animate-fade-in">
+        <PreviewHeader onClose={onClose} onRefresh={handleRefresh} isCodeMode={true} fileName={activeFile?.name} language={activeFile?.language} />
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="max-w-md w-full bg-[#161b22] border border-[#21262d] rounded-3xl p-8 text-center shadow-2xl">
+            <div className="w-20 h-20 bg-emerald-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-emerald-500/20">
+              <Package size={40} className="text-emerald-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-3">Android Build Required</h3>
+            <p className="text-gray-400 mb-8 leading-relaxed">
+              This file contains Android-specific libraries (UI components, Activities) that cannot be run as a console script.
+            </p>
+            
+            <div className="space-y-4 text-left mb-8 bg-black/30 rounded-2xl p-4 border border-[#30363d]">
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center mt-0.5">
+                  <span className="text-[10px] text-blue-400 font-bold">1</span>
+                </div>
+                <p className="text-xs text-gray-300">Open the <span className="text-blue-400 font-semibold">Build APK</span> tab in the bottom panel</p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center mt-0.5">
+                  <span className="text-[10px] text-blue-400 font-bold">2</span>
+                </div>
+                <p className="text-xs text-gray-300">Push your changes to trigger the Android pipeline</p>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center mt-0.5">
+                  <span className="text-[10px] text-blue-400 font-bold">3</span>
+                </div>
+                <p className="text-xs text-gray-300">Download and install the APK on your device</p>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => {
+                onClose();
+                // We'll rely on the user manually switching, as we don't have a direct dispatch for TopBar -> BottomPanel tabs here easily yet
+                // but this message provides the clear path forward.
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-95"
+            >
+              Got it
+            </button>
+          </div>
         </div>
       </div>
     );

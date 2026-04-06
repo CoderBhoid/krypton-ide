@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronUp, ChevronDown, Trash2, Send, AlertCircle, AlertTriangle, Info, Filter } from 'lucide-react';
+import { X, ChevronUp, ChevronDown, Trash2, Send, AlertCircle, AlertTriangle, Info, Filter, Package } from 'lucide-react';
 import { TerminalPanel } from './TerminalPanel';
+import { BuildPanel } from '../build/BuildPanel';
 import { useOutputStore } from '../../store/useOutputStore';
 import { useProblemsStore } from '../../store/useProblemsStore';
 import { useIdeStore } from '../../store/useIdeStore';
+import { useProjectsStore } from '../../store/useProjectsStore';
 
 interface BottomPanelProps {
   onClose: () => void;
@@ -12,8 +14,21 @@ interface BottomPanelProps {
 }
 
 export function BottomPanel({ onClose, height, setHeight }: BottomPanelProps) {
-  const [activeTab, setActiveTab] = useState<'terminal' | 'problems' | 'output' | 'console'>('terminal');
+  const { currentProjectId, projects } = useProjectsStore();
+  const { runTarget, setRunTarget } = useIdeStore();
+  const project = currentProjectId ? projects[currentProjectId] : null;
+  const isAndroidProject = project?.template?.startsWith('android-');
+  const isKotlinOrJava = project?.template === 'kotlin-cli' || project?.template === 'java-cli';
+
+  const [activeTab, setActiveTab] = useState<'terminal' | 'problems' | 'output' | 'console' | 'build'>('terminal');
   const [consoleLogs, setConsoleLogs] = useState<{ type: string; args: string; ts: number }[]>([]);
+
+  // Automatically switch away from build tab if not an android project
+  useEffect(() => {
+    if (activeTab === 'build' && !isAndroidProject) {
+      setActiveTab('terminal');
+    }
+  }, [isAndroidProject, activeTab]);
 
   // Listen for console logs from preview
   useEffect(() => {
@@ -48,21 +63,54 @@ export function BottomPanel({ onClose, height, setHeight }: BottomPanelProps) {
           >
             <span>Terminal</span>
           </div>
+          {isAndroidProject && (
+            <div
+              className={`flex items-center space-x-1.5 cursor-pointer h-9 px-1 ${activeTab === 'build' ? 'text-blue-400 border-b border-blue-500' : 'hover:text-white text-blue-500/70'}`}
+              onClick={() => setActiveTab('build')}
+            >
+              <Package size={14} />
+              <span className="font-bold">Build APK</span>
+            </div>
+          )}
         </div>
-        <div className="flex items-center space-x-1 text-gray-400 flex-shrink-0 ml-4">
-          <button onClick={() => setHeight(height > 400 ? 250 : window.innerHeight - 150)} className="p-1 hover:text-white hover:bg-white/10 rounded" title="Toggle Maximize">
-            {height > 400 ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-          </button>
-          <button onClick={onClose} className="p-1 hover:text-white hover:bg-white/10 rounded" title="Close Panel"><X size={14} /></button>
+
+        <div className="flex items-center space-x-2">
+          {/* Kotlin/Java Target Selector */}
+          {isKotlinOrJava && (
+            <div className="hidden md:flex items-center bg-[#252526] rounded-full p-0.5 border border-[#3c3c3c] mr-2">
+              <button
+                onClick={() => setRunTarget('java')}
+                className={`px-3 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                  runTarget === 'java' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                JVM
+              </button>
+              <button
+                onClick={() => setRunTarget('wasm')}
+                className={`px-3 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                  runTarget === 'wasm' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                WASM
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center space-x-1 text-gray-400 flex-shrink-0">
+            <button onClick={() => setHeight(height > 400 ? 250 : window.innerHeight - 150)} className="p-1 hover:text-white hover:bg-white/10 rounded" title="Toggle Maximize">
+              {height > 400 ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            </button>
+            <button onClick={onClose} className="p-1 hover:text-white hover:bg-white/10 rounded" title="Close Panel"><X size={14} /></button>
+          </div>
         </div>
       </div>
-      <div className="flex-1 overflow-hidden">
         {activeTab === 'terminal' && <TerminalPanel />}
         {activeTab === 'problems' && <ProblemsPanel />}
         {activeTab === 'output' && <OutputPanel />}
         {activeTab === 'console' && <ConsolePanel logs={consoleLogs} onClear={() => setConsoleLogs([])} />}
+        {activeTab === 'build' && <BuildPanel onMinimize={onClose} />}
       </div>
-    </div>
   );
 }
 
@@ -180,7 +228,7 @@ function ProblemsPanel() {
             onClick={sendToAgent}
             disabled={problems.length === 0}
             className="flex items-center space-x-1.5 px-2.5 py-1 rounded text-[10px] uppercase tracking-wider font-semibold bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            title="Send all problems to Luminous AI"
+            title="Send all problems to Sedna AI"
           >
             <Send size={11} />
             <span>Send to Agent</span>

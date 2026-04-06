@@ -30,7 +30,7 @@ const LANGUAGE_MAP: Record<string, { language: string; version: string }> = {
   'ruby': { language: 'ruby', version: '3.0.1' },
   'php': { language: 'php', version: '8.2.3' },
   'swift': { language: 'swift', version: '5.3.3' },
-  'kotlin': { language: 'kotlin', version: '1.8.20' },
+  'kotlin': { language: 'kotlin', version: '1.9.21' },
   'dart': { language: 'dart', version: '2.19.6' },
   'shell': { language: 'bash', version: '5.2.0' },
   'lua': { language: 'lua', version: '5.4.4' },
@@ -199,6 +199,68 @@ sys.stderr = io.StringIO()
   }
 }
 
+// ─── Kotlin/Java: Official Kotlin Playground API ───
+// This is the "Industry Standard" for browser-based Kotlin execution.
+async function executeKotlinPlayground(code: string, target: 'java' | 'js' | 'wasm' = 'java'): Promise<ExecutionResult> {
+  const KOTLIN_VERSION = '2.1.0'; // Using a stable version
+  
+  try {
+    // JVM uses 'run', while JS/WASM uses 'translate'
+    const isTranslation = target === 'js' || target === 'wasm';
+    const endpoint = isTranslation 
+      ? `https://api.kotlinlang.org/api/${KOTLIN_VERSION}/compiler/translate?ir=true${target === 'wasm' ? '&compiler=wasm' : ''}`
+      : `https://api.kotlinlang.org/api/${KOTLIN_VERSION}/compiler/run`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Origin': 'https://play.kotlinlang.org',
+        'Referer': 'https://play.kotlinlang.org/'
+      },
+      body: JSON.stringify({
+        args: "",
+        files: [{ name: "File.kt", text: code, publicId: "" }],
+        confType: target, // java = JVM, js = JavaScript, wasm = WebAssembly
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Kotlin Engine [${target.toUpperCase()}] returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Kotlin playground returns errors in a specific field
+    const errors = data.errors?.["File.kt"] || [];
+    const compilerStderr = errors
+      .map((err: any) => `${err.severity}: ${err.message} (${err.interval.start.line}, ${err.interval.start.ch})`)
+      .join('\n');
+
+    let output = '';
+    if (isTranslation) {
+      output = data.jsCode ? `Translation successful. Code ready for execution in browser.` : '';
+    } else {
+      // Standard JVM output is in the 'text' field
+      output = data.text || '';
+    }
+
+    const isSuccess = !compilerStderr && !data.exception;
+
+    return {
+      success: isSuccess,
+      output: output,
+      stderr: compilerStderr || (data.exception ? data.exception.message : ''),
+      exitCode: isSuccess ? 0 : 1,
+      language: 'kotlin',
+      version: `Kotlin ${KOTLIN_VERSION} (${target.toUpperCase()})`,
+    };
+  } catch (err: any) {
+    console.error("Kotlin Playground API error", err);
+    throw new Error(`Could not connect to Kotlin Engine: ${err.message}`);
+  }
+}
+
 // ─── Other languages: Piston API with fallbacks ───
 async function executePistonAPI(code: string, language: string, filename?: string): Promise<ExecutionResult> {
   const mapping = LANGUAGE_MAP[language];
@@ -227,16 +289,28 @@ async function executePistonAPI(code: string, language: string, filename?: strin
     run_timeout: 10000,
   });
 
+  const errors: string[] = [];
+
   // Try each endpoint
   for (const baseUrl of PISTON_ENDPOINTS) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch(`${baseUrl}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
+        signal: controller.signal,
       });
 
-      if (!response.ok) continue; // Try next endpoint
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        errors.push(`Endpoint [${baseUrl}] returned ${response.status}: ${errText}`);
+        continue;
+      }
 
       const data = await response.json();
       const run = data.run || {};
@@ -261,15 +335,17 @@ async function executePistonAPI(code: string, language: string, filename?: strin
         language: data.language || language,
         version: data.version || mapping.version,
       };
-    } catch {
-      continue; // Try next endpoint
+    } catch (err: any) {
+      console.error(`Piston execution failed for endpoint ${baseUrl}:`, err);
+      errors.push(`Endpoint [${baseUrl}] error: ${err.message || String(err)}`);
     }
   }
 
+  // If all endpoints fail
   return {
     success: false,
     output: '',
-    stderr: `Could not connect to code execution servers.\n\nFor Python and JavaScript, Krypton IDE runs code directly in your browser — no server needed!\n\nFor other languages (${language}), a server connection is required. Please try again later.`,
+    stderr: `Could not connect to code execution servers.\n\nDetails:\n${errors.join('\n')}\n\nFor Python and JavaScript, Krypton IDE runs code directly in your browser. For other languages (${language}), a stable internet connection and access to emkc.org is required.`,
     exitCode: 1,
     language,
     version: '',
@@ -277,18 +353,38 @@ async function executePistonAPI(code: string, language: string, filename?: strin
 }
 
 // ─── Main entry point ───
-export async function executeCode(code: string, language: string, filename?: string): Promise<ExecutionResult> {
-  // JavaScript: run in-browser
+export async function executeCode(language: string, code: string, filename?: string, target?: string): Promise<ExecutionResult> {
+  if (language === 'html') {
+    return { success: true, output: 'HTML content previewed in Live Preview.', stderr: '', exitCode: 0, language: 'html', version: '' };
+  }
+  
   if (language === 'javascript') {
     return executeJavaScript(code);
   }
   
-  // Python: run via Pyodide WebAssembly
   if (language === 'python') {
     return executePython(code);
   }
 
-  // Everything else: Piston API
+  if (language === 'kotlin' || language === 'java') {
+    try {
+      // Use provided target (jvm/wasm/js) or default to java (JVM)
+      const ktTarget = (target === 'wasm' || target === 'js') ? target : 'java';
+      return await executeKotlinPlayground(code, ktTarget);
+    } catch (err: any) {
+      // For Kotlin/Java, we no longer fallback to Piston as it's whitelist-only
+      // Instead, we return a clear error about the playground connection
+      return {
+        success: false,
+        output: '',
+        stderr: `Kotlin Execution Error: ${err.message}\n\nPlease check your internet connection or the Kotlin Playground status.`,
+        exitCode: 1,
+        language: 'kotlin',
+        version: '',
+      };
+    }
+  }
+  
   return executePistonAPI(code, language, filename);
 }
 

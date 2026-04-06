@@ -31,7 +31,7 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     GoogleAuth: {
-      scopes: ['profile', 'email'],
+      scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
       serverClientId: '228869160750-nqir9tev4919koqbcsrnhfo5puorqtqa.apps.googleusercontent.com',
       forceCodeForRefreshToken: true,
     },

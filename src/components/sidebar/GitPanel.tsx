@@ -4,6 +4,7 @@ import { useIdeStore } from '../../store/useIdeStore';
 import { useAuthStore, type GitHubUser } from '../../store/useAuthStore';
 import { getGitStatus, commitChanges } from '../../lib/gitService';
 import { listRepos, createRepo, pushProject, pullRepo, type GitHubRepo, type PushResult } from '../../lib/githubService';
+import { startDeviceFlow, type DeviceFlowSession } from '../../lib/githubOAuth';
 
 type GitTab = 'changes' | 'github';
 
@@ -134,9 +135,12 @@ function ChangesTab() {
 
 function GitHubTab() {
   const { githubToken, githubUser, githubRepoLink, setGithubToken, setGithubRepoLink, clearGithub } = useAuthStore();
-  const [tokenInput, setTokenInput] = useState('');
-  const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState('');
+  
+  // Device flow state
+  const [deviceFlowSession, setDeviceFlowSession] = useState<DeviceFlowSession | null>(null);
+  const [deviceFlowStatus, setDeviceFlowStatus] = useState<'idle' | 'waiting' | 'success' | 'error'>('idle');
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // Repo operations state
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
@@ -157,16 +161,48 @@ function GitHubTab() {
   const [newRepoPrivate, setNewRepoPrivate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleConnect = async () => {
-    if (!tokenInput.trim()) return;
-    setIsConnecting(true);
+  const handleGithubDeviceFlow = async () => {
+    setDeviceFlowStatus('waiting');
     setError('');
-    const success = await setGithubToken(tokenInput.trim());
-    if (!success) {
-      setError('Invalid token. Make sure it has "repo" scope.');
+    try {
+      const session = await startDeviceFlow();
+      setDeviceFlowSession(session);
+      
+      const result = await session.waitForToken();
+      
+      if (result.status === 'complete') {
+        const success = await setGithubToken(result.token);
+        if (success) {
+          setDeviceFlowStatus('success');
+          setTimeout(() => {
+            setDeviceFlowStatus('idle');
+            setDeviceFlowSession(null);
+          }, 2000);
+        } else {
+          setDeviceFlowStatus('error');
+          setError('Failed to validate GitHub token.');
+        }
+      } else if (result.status === 'expired') {
+        setDeviceFlowStatus('error');
+        setError('Login code expired. Please try again.');
+        setDeviceFlowSession(null);
+      } else {
+        setDeviceFlowStatus('idle');
+        setDeviceFlowSession(null);
+      }
+    } catch (err: any) {
+      setDeviceFlowStatus('error');
+      setError(err.message || 'Failed to authenticate');
+      setDeviceFlowSession(null);
     }
-    setIsConnecting(false);
-    setTokenInput('');
+  };
+
+  const copyDeviceCode = () => {
+    if (deviceFlowSession) {
+      navigator.clipboard.writeText(deviceFlowSession.userCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
   };
 
   const loadRepos = async () => {
@@ -244,53 +280,69 @@ function GitHubTab() {
     return (
       <div className="p-4 space-y-4">
         <div className="text-center py-6">
-          <Github size={40} className="mx-auto mb-3 text-gray-500" />
+          <Github size={40} className="mx-auto mb-3 text-gray-400" />
           <h3 className="text-white font-semibold mb-1">Connect GitHub</h3>
           <p className="text-gray-500 text-xs leading-relaxed mb-4">
-            Link your account to push/pull repos directly from Krypton IDE.
+            Link your account to push and pull repositories directly from Krypton IDE.
           </p>
         </div>
 
-        <div className="space-y-3">
-          <input
-            type="password"
-            value={tokenInput}
-            onChange={e => setTokenInput(e.target.value)}
-            placeholder="Paste your GitHub Personal Access Token"
-            className="w-full rounded-lg border border-[#3c3c3c] bg-[#1e1e1e] p-2.5 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none text-sm"
-            onKeyDown={e => e.key === 'Enter' && handleConnect()}
-          />
-
-          {error && <p className="text-red-400 text-xs">{error}</p>}
-
-          <button
-            onClick={handleConnect}
-            disabled={isConnecting || !tokenInput.trim()}
-            className="w-full flex items-center justify-center space-x-2 bg-[#238636] hover:bg-[#2ea043] text-white py-2.5 rounded-lg disabled:opacity-50 transition-colors font-medium"
-          >
-            {isConnecting ? <Loader size={14} className="animate-spin" /> : <Github size={14} />}
-            <span>{isConnecting ? 'Validating...' : 'Connect'}</span>
-          </button>
-        </div>
-
-        <div className="text-xs text-gray-500 bg-[#1e1e1e] p-3 rounded-lg border border-[#2d2d2d] space-y-1.5">
-          <p className="font-semibold text-gray-400">How to get a token:</p>
-          <ol className="list-decimal list-inside space-y-1 leading-relaxed">
-            <li>Go to github.com → Settings → Developer settings</li>
-            <li>Personal access tokens → Tokens (classic)</li>
-            <li>Generate new token with <strong className="text-blue-400">repo</strong> scope</li>
-            <li>Copy and paste it above</li>
-          </ol>
-          <a
-            href="https://github.com/settings/tokens/new?description=Krypton%20IDE&scopes=repo"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center space-x-1 text-blue-400 hover:text-blue-300 mt-2"
-          >
-            <ExternalLink size={11} />
-            <span>Create token directly →</span>
-          </a>
-        </div>
+        {deviceFlowStatus === 'idle' || deviceFlowStatus === 'error' ? (
+          <div className="space-y-3">
+            <button
+              onClick={handleGithubDeviceFlow}
+              className="w-full flex items-center justify-center space-x-2 bg-[#238636] hover:bg-[#2ea043] text-white py-2.5 rounded-lg transition-colors font-medium text-sm shadow-md"
+            >
+              <Github size={16} />
+              <span>Login with GitHub</span>
+            </button>
+            {error && <p className="text-red-400 text-xs text-center border border-red-500/20 bg-red-500/10 p-2 rounded">{error}</p>}
+          </div>
+        ) : deviceFlowStatus === 'waiting' && deviceFlowSession ? (
+          <div className="bg-[#1e1e1e] p-4 rounded-xl border border-blue-500/30 text-center space-y-4 shadow-lg">
+            <Loader size={24} className="animate-spin text-blue-400 mx-auto" />
+            <div>
+              <p className="text-white text-sm font-medium mb-1">Waiting for Authorization</p>
+              <p className="text-gray-400 text-xs">Enter this code on GitHub to securely authorize Krypton IDE.</p>
+            </div>
+            
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d] flex items-center justify-between">
+              <span className="text-white font-mono text-lg tracking-widest font-bold">{deviceFlowSession.userCode}</span>
+              <button
+                onClick={copyDeviceCode}
+                className="text-xs bg-[#21262d] hover:bg-[#30363d] text-gray-300 px-3 py-1.5 rounded transition-colors"
+              >
+                {codeCopied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            
+            <a
+              href={deviceFlowSession.verificationUri}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center space-x-2 text-sm bg-white text-black px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors w-full"
+            >
+              <span>Open GitHub</span>
+              <ExternalLink size={14} />
+            </a>
+            
+            <button
+              onClick={() => {
+                deviceFlowSession.cancel();
+                setDeviceFlowStatus('idle');
+                setDeviceFlowSession(null);
+              }}
+              className="text-gray-500 hover:text-white text-xs underline mt-2"
+            >
+              Cancel Login
+            </button>
+          </div>
+        ) : deviceFlowStatus === 'success' ? (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl text-center space-y-2">
+            <Check size={28} className="text-emerald-500 mx-auto" />
+            <p className="text-emerald-400 font-medium text-sm">Successfully Connected!</p>
+          </div>
+        ) : null}
       </div>
     );
   }

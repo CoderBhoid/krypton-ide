@@ -1,20 +1,74 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, FolderOpen, Clock, FileCode2, ChevronRight, X, Code2, FileText, Braces } from 'lucide-react';
-import { useProjectsStore, type ProjectTemplate } from '../../store/useProjectsStore';
+import { Plus, Trash2, Edit2, FolderOpen, Clock, FileCode2, ChevronRight, X, Code2, FileText, Braces, Github, Loader2, Smartphone, MonitorPlay, Server, TerminalSquare } from 'lucide-react';
+import { useProjectsStore } from '../../store/useProjectsStore';
+import { type ProjectTemplate } from '../../lib/projectTemplates';
 import { useAuthStore } from '../../store/useAuthStore';
+import { createRepo, listRepos, pullRepo, type GitHubRepo } from '../../lib/githubService';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+
 import { useIdeStore } from '../../store/useIdeStore';
+import { readConfig, saveConfigNow } from '../../lib/fileSystemStorage';
 
 const GOOGLE_CLIENT_ID = '228869160750-nqir9tev4919koqbcsrnhfo5puorqtqa.apps.googleusercontent.com';
 
-const templateOptions: { id: ProjectTemplate; name: string; desc: string; icon: React.ReactNode; color: string }[] = [
-  { id: 'html-css-js', name: 'HTML / CSS / JS', desc: 'Web project with starter files', icon: <Code2 size={24} />, color: 'from-orange-500 to-rose-500' },
-  { id: 'react', name: 'React', desc: 'React app with JSX & CDN', icon: <Braces size={24} />, color: 'from-cyan-400 to-blue-500' },
-  { id: 'python', name: 'Python', desc: 'Python script template', icon: <FileCode2 size={24} />, color: 'from-yellow-400 to-green-500' },
-  { id: 'markdown', name: 'Markdown', desc: 'Documentation project', icon: <FileText size={24} />, color: 'from-purple-400 to-pink-500' },
-  { id: 'blank', name: 'Blank', desc: 'Empty project', icon: <FolderOpen size={24} />, color: 'from-gray-400 to-gray-600' },
+
+
+const templateCategories = [
+  {
+    id: 'mobile',
+    name: 'Android & Mobile',
+    icon: <Smartphone size={18} />,
+    templates: [
+      { id: 'android-java', name: 'Android (Java)', desc: 'Standard Android app with Java & XML', icon: <Code2 size={24} />, color: 'from-green-500 to-emerald-700' },
+      { id: 'android-kotlin', name: 'Android (Kotlin)', desc: 'Modern Android app with Kotlin', icon: <Code2 size={24} />, color: 'from-purple-500 to-indigo-700' },
+      { id: 'android-compose', name: 'Android (Compose)', desc: 'Jetpack Compose native UI', icon: <Braces size={24} />, color: 'from-blue-400 to-indigo-600' },
+    ]
+  },
+  {
+    id: 'web',
+    name: 'Web Frontend',
+    icon: <MonitorPlay size={18} />,
+    templates: [
+      { id: 'html-css-js', name: 'HTML / JS', desc: 'Web project with starter files', icon: <Code2 size={24} />, color: 'from-orange-500 to-rose-500' },
+      { id: 'react', name: 'React', desc: 'React app with JSX & CDN', icon: <Braces size={24} />, color: 'from-cyan-400 to-blue-500' },
+      { id: 'vite-react', name: 'Vite + React', desc: 'Modern React app with Vite', icon: <Braces size={24} />, color: 'from-indigo-500 to-purple-600' },
+      { id: 'nextjs', name: 'Next.js', desc: 'Full-stack React framework', icon: <MonitorPlay size={24} />, color: 'from-gray-700 to-black' },
+    ]
+  },
+  {
+    id: 'backend',
+    name: 'Backend & APIs',
+    icon: <Server size={18} />,
+    templates: [
+      { id: 'python-fastapi', name: 'FastAPI', desc: 'High-performance Python API', icon: <Server size={24} />, color: 'from-teal-400 to-emerald-500' },
+      { id: 'nodejs-express', name: 'Node + Express', desc: 'Express.js backend server', icon: <Server size={24} />, color: 'from-green-600 to-green-800' },
+    ]
+  },
+  {
+    id: 'cli',
+    name: 'CLI & Scripts',
+    icon: <TerminalSquare size={18} />,
+    templates: [
+      { id: 'python', name: 'Python Script', desc: 'Standalone Python script', icon: <TerminalSquare size={24} />, color: 'from-yellow-400 to-amber-600' },
+      { id: 'rust-cli', name: 'Rust CLI', desc: 'Command line tool in Rust', icon: <TerminalSquare size={24} />, color: 'from-orange-600 to-red-700' },
+      { id: 'java-cli', name: 'Java Console', desc: 'Simple Java app', icon: <TerminalSquare size={24} />, color: 'from-red-500 to-orange-500' },
+      { id: 'kotlin-cli', name: 'Kotlin Console', desc: 'Simple Kotlin app', icon: <TerminalSquare size={24} />, color: 'from-purple-500 to-blue-500' },
+    ]
+  },
+  {
+    id: 'other',
+    name: 'Blank',
+    icon: <FileText size={18} />,
+    templates: [
+      { id: 'markdown', name: 'Markdown', desc: 'Documentation project', icon: <FileText size={24} />, color: 'from-purple-400 to-pink-500' },
+      { id: 'blank', name: 'Blank', desc: 'Empty workspace', icon: <FolderOpen size={24} />, color: 'from-gray-400 to-gray-600' },
+    ]
+  }
 ];
+
+// Flat list for easy lookup
+const templateOptions = templateCategories.flatMap(c => c.templates);
 
 function formatDate(ts: number) {
   const d = new Date(ts);
@@ -34,7 +88,7 @@ function countFiles(files: Record<string, any>): number {
 
 // ── Welcome Screen for first-time users ──
 function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
-  const { setGoogleUser } = useAuthStore();
+  const { setGoogleUser, setGoogleAuth } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [showContent, setShowContent] = useState(false);
   const [showButton, setShowButton] = useState(false);
@@ -45,7 +99,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
     try {
       GoogleAuth.initialize({
         clientId: GOOGLE_CLIENT_ID,
-        scopes: ['profile', 'email'],
+        scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
         grantOfflineAccess: true,
       });
     } catch (e) {
@@ -66,7 +120,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
           email: "developer@sednium.com",
           picture: "",
         });
-        localStorage.setItem('krypton-welcomed', 'true');
+        readConfig().then(c => { if (c) { c.welcomed = true; saveConfigNow(c); } });
         onSkip();
         return;
       }
@@ -74,12 +128,18 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
       const response = await GoogleAuth.signIn();
       const givenName = response.givenName || '';
       const familyName = response.familyName || '';
-      setGoogleUser({
+      const accessToken = response.authentication?.accessToken || '';
+      const user = {
         name: response.name || `${givenName} ${familyName}`.trim() || response.email,
         email: response.email,
         picture: response.imageUrl || '',
-      });
-      localStorage.setItem('krypton-welcomed', 'true');
+      };
+      if (accessToken) {
+        setGoogleAuth(user, accessToken);
+      } else {
+        setGoogleUser(user);
+      }
+      readConfig().then(c => { if (c) { c.welcomed = true; saveConfigNow(c); } });
       onSkip();
     } catch (err: any) {
       console.error('Google sign-in error:', err);
@@ -122,7 +182,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
         <button
           onClick={handleGoogleSignIn}
           disabled={isLoading}
-          className={`w-full max-w-[320px] flex items-center justify-center space-x-3 bg-gray-50 dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/15 py-4 rounded-2xl font-semibold text-lg shadow-2xl active:scale-[0.97] transition-all duration-300 mb-4 disabled:opacity-60 premium-glow ${showButton ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}
+          className={`w-full max-w-[320px] flex items-center justify-center space-x-3 bg-gray-50 dark:bg-[#111] border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-[#1a1a1a] py-4 rounded-2xl font-semibold text-lg shadow-xl active:scale-[0.97] transition-all duration-300 mb-4 disabled:opacity-60 ${showButton ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}
         >
           {isLoading ? (
             <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -142,7 +202,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
         {/* Get Started / Skip */}
         <button
           onClick={() => {
-            localStorage.setItem('krypton-welcomed', 'true');
+            readConfig().then(c => { if (c) { c.welcomed = true; saveConfigNow(c); } });
             onSkip();
           }}
           className={`text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 text-sm py-2 transition-all duration-300 ${showButton ? 'opacity-100' : 'opacity-0'}`}
@@ -158,33 +218,99 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
 }
 
 export function ProjectsDashboard() {
-  const { projects, createProject, deleteProject, renameProject, openProject } = useProjectsStore();
-  const { googleUser } = useAuthStore();
-  const { isGlassmorphismEnabled } = useIdeStore();
+  const { projects, createProject, deleteProject, renameProject, openProject, setProjectGitHubRepo } = useProjectsStore();
+  const { googleUser, githubUser, githubToken } = useAuthStore();
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate>('html-css-js');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [showWelcome, setShowWelcome] = useState(false);
+  const [linkGitHub, setLinkGitHub] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [showCloneRepo, setShowCloneRepo] = useState(false);
+  const [cloneSearch, setCloneSearch] = useState('');
+  const [repos, setRepos] = useState<GitHubRepo[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [isCloning, setIsCloning] = useState<string | null>(null);
 
   // Show welcome screen for first-time users
   useEffect(() => {
-    const welcomed = localStorage.getItem('krypton-welcomed');
-    if (!welcomed) {
-      setShowWelcome(true);
-    }
+    readConfig().then(config => {
+      if (config && !config.welcomed) {
+        setShowWelcome(true);
+      }
+    });
   }, []);
 
   const sortedProjects = Object.values(projects).sort((a, b) => b.updatedAt - a.updatedAt);
 
-  const handleCreate = () => {
-    const name = newProjectName.trim() || 'Untitled Project';
-    const id = createProject(name, selectedTemplate);
-    setShowNewProject(false);
-    setNewProjectName('');
-    openProject(id);
+  const handleCreate = async () => {
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      const name = newProjectName.trim() || 'Untitled Project';
+      const id = createProject(name, selectedTemplate);
+      
+      if (linkGitHub && githubToken && githubUser) {
+        try {
+          // Name formatting: replace spaces/special chars with hyphens
+          const repoSafeName = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          const repo = await createRepo(repoSafeName, `Created with Krypton IDE`, true);
+          setProjectGitHubRepo(id, repo.full_name);
+          // Note: Actual push will happen automatically later when user opens project and saves/pushes
+        } catch (e: any) {
+          console.error('Failed to create GitHub repo', e);
+          alert(`Project created, but GitHub repo creation failed: ${e.message}`);
+        }
+      }
+
+      setShowNewProject(false);
+      setNewProjectName('');
+      setLinkGitHub(true);
+      openProject(id);
+    } finally {
+      setIsCreating(false);
+    }
   };
+
+  const handleClone = async (repo: GitHubRepo) => {
+    if (isCloning) return;
+    setIsCloning(repo.full_name);
+    try {
+      const id = createProject(repo.name, 'blank');
+      setProjectGitHubRepo(id, repo.full_name);
+      openProject(id);
+      
+      const [owner, name] = repo.full_name.split('/');
+      await pullRepo(owner, name);
+      
+      setShowCloneRepo(false);
+    } catch (e: any) {
+      console.error('Clone failed:', e);
+      alert(`Clone failed: ${e.message}`);
+    } finally {
+      setIsCloning(null);
+    }
+  };
+
+  const loadGitHubRepos = async () => {
+    if (!githubToken) return;
+    setLoadingRepos(true);
+    try {
+      const r = await listRepos();
+      setRepos(r);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingRepos(false);
+  };
+
+  useEffect(() => {
+    if (showCloneRepo && repos.length === 0) {
+      loadGitHubRepos();
+    }
+  }, [showCloneRepo, githubToken]);
 
   const handleRename = (id: string) => {
     if (editName.trim()) {
@@ -214,7 +340,7 @@ export function ProjectsDashboard() {
       )}
 
       {/* Header */}
-      <div className={`relative z-10 border-x-0 border-t-0 border-b border-gray-200 dark:border-white/5 sticky top-0 ${isGlassmorphismEnabled ? 'glass-panel' : 'bg-white dark:bg-[#161b22]'}`}>
+      <div className="relative z-10 border-x-0 border-t-0 border-b border-gray-200 dark:border-white/5 sticky top-0 bg-white dark:bg-[#111]">
         <div className="relative px-6 pt-[var(--safe-area-top,48px)] pb-6">
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="relative shadow-lg shadow-blue-500/20 rounded-[1.25rem]">
@@ -232,14 +358,24 @@ export function ProjectsDashboard() {
 
       {/* Content */}
       <div className="flex-1 px-6 pb-8 relative z-10 mt-6">
-        {/* New Project Button */}
-        <button 
-          onClick={() => setShowNewProject(true)}
-          className={`w-full flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-[0.98] transition-all duration-300 mb-8 premium-glow ${isGlassmorphismEnabled ? 'bg-gray-900 text-white dark:bg-white dark:text-black shadow-gray-900/10 dark:shadow-white/10' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-        >
-          <Plus size={22} strokeWidth={2.5} />
-          <span>Create New Project</span>
-        </button>
+        {/* Action Buttons */}
+        <div className="flex space-x-3 mb-8">
+          <button 
+            onClick={() => setShowNewProject(true)}
+            className="flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-[15px] shadow-xl active:scale-[0.98] transition-all duration-300 bg-blue-600 text-white hover:bg-blue-700"
+          >
+            <Plus size={20} strokeWidth={2.5} />
+            <span>New Project</span>
+          </button>
+          
+          <button 
+            onClick={() => setShowCloneRepo(true)}
+            className="flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-[15px] shadow-xl active:scale-[0.98] transition-all duration-300 bg-[#2ea043] text-white hover:bg-[#2c974b]"
+          >
+            <Github size={20} strokeWidth={2.5} />
+            <span>Clone Repo</span>
+          </button>
+        </div>
 
         {/* Projects List */}
         {sortedProjects.length === 0 ? (
@@ -262,11 +398,7 @@ export function ProjectsDashboard() {
               return (
                 <div
                   key={project.id}
-                  className={`group rounded-2xl p-4 transition-all duration-300 cursor-pointer animate-fade-slide-up relative overflow-hidden ${
-                    isGlassmorphismEnabled 
-                      ? 'glass-panel glass-panel-active glass-panel-hover' 
-                      : 'bg-white dark:bg-[#161b22] border border-gray-200 dark:border-[#30363d]'
-                  }`}
+                  className="group rounded-2xl p-4 transition-all duration-300 cursor-pointer animate-fade-slide-up relative overflow-hidden bg-white dark:bg-[#111] border border-gray-200 dark:border-[#222] hover:border-blue-500/50 active:scale-[0.99]"
                   style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'both' }}
                   onClick={() => {
                     if (editingId !== project.id) openProject(project.id);
@@ -290,7 +422,7 @@ export function ProjectsDashboard() {
                               if (e.key === 'Escape') setEditingId(null);
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-black/5 dark:bg-white/10 backdrop-blur-md border border-blue-400 rounded-lg px-3 py-1 text-gray-900 dark:text-white text-base font-semibold w-full focus:outline-none shadow-lg"
+                            className="bg-gray-50 dark:bg-black/40 border border-blue-400 rounded-lg px-3 py-1 text-gray-900 dark:text-white text-base font-semibold w-full focus:outline-none shadow-lg"
                           />
                         ) : (
                           <h3 className="font-bold text-gray-900 dark:text-white truncate text-lg">{project.name}</h3>
@@ -335,12 +467,11 @@ export function ProjectsDashboard() {
         )}
       </div>
 
-      {/* New Project Modal */}
       {showNewProject && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-md animate-fade-in" onClick={() => setShowNewProject(false)} />
+          <div className="absolute inset-0 bg-black/80 animate-fade-in" onClick={() => setShowNewProject(false)} />
           
-          <div className={`relative w-full max-w-md sm:border rounded-t-[2rem] sm:rounded-[2rem] p-6 max-h-[85vh] overflow-y-auto animate-slide-up shadow-2xl ${isGlassmorphismEnabled ? 'glass-panel border-gray-200 dark:border-white/10 dark:shadow-black/80 shadow-gray-400/50' : 'bg-white dark:bg-[#161b22] border-gray-200 dark:border-[#30363d]'}`}>
+          <div className="relative w-full max-w-4xl sm:border rounded-t-[2rem] sm:rounded-[2rem] p-6 max-h-[90vh] overflow-y-auto animate-slide-up shadow-2xl bg-white dark:bg-[#111] border-gray-200 dark:border-[#222]">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white/90">New Project</h2>
               <button 
@@ -366,45 +497,173 @@ export function ProjectsDashboard() {
 
             {/* Template Selection */}
             <div className="mb-8">
-              <label className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 block uppercase tracking-wider">Environment</label>
-              <div className="grid grid-cols-2 gap-3">
-                {templateOptions.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setSelectedTemplate(t.id)}
-                    className={`flex flex-col items-start p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden ${
-                      selectedTemplate === t.id
-                        ? 'border-blue-500/50 bg-blue-50 dark:bg-blue-500/10 shadow-lg shadow-blue-500/10 scale-[1.02]'
-                        : 'border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10'
-                    }`}
-                  >
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center mb-3 shadow-lg`}>
-                      {t.icon}
+              <label className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 block uppercase tracking-wider">Choose a Template</label>
+              <div className="space-y-6">
+                {templateCategories.map((category) => (
+                  <div key={category.id}>
+                    <h3 className="flex items-center space-x-2 text-[13px] font-bold text-gray-700 dark:text-gray-300 mb-3 ml-1">
+                      {category.icon}
+                      <span>{category.name}</span>
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {category.templates.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => setSelectedTemplate(t.id as ProjectTemplate)}
+                          className={`flex flex-col items-start p-3 sm:p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group ${
+                            selectedTemplate === t.id
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-lg shadow-blue-500/10 scale-[1.02]'
+                              : 'border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20'
+                          }`}
+                        >
+                          {/* Glare effect */}
+                          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/40 dark:via-white/5 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                          
+                          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center mb-3 shadow-lg transform transition-transform group-hover:scale-110`}>
+                            {React.cloneElement(t.icon as React.ReactElement, { size: 20 })}
+                          </div>
+                          <div className="text-left w-full">
+                            <div className="font-bold text-gray-900 dark:text-white/90 mb-1 leading-tight text-sm sm:text-base">{t.name}</div>
+                            <div className="text-[10px] sm:text-[11px] text-gray-500 leading-snug line-clamp-2">{t.desc}</div>
+                          </div>
+                          {/* Active Selector Ring */}
+                          <div className={`absolute top-4 right-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center transition-colors ${selectedTemplate === t.id ? 'border-blue-500 bg-blue-500' : 'border-gray-200 dark:border-white/20'}`}>
+                            {selectedTemplate === t.id && (
+                              <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M2 6l3 3 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+                      ))}
                     </div>
-                    <div className="text-left w-full">
-                      <div className="font-bold text-gray-900 dark:text-white/90 mb-1 leading-tight">{t.name}</div>
-                      <div className="text-[11px] text-gray-500 leading-snug line-clamp-2">{t.desc}</div>
-                    </div>
-                    {/* Active Selector Ring */}
-                    <div className={`absolute top-4 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${selectedTemplate === t.id ? 'border-blue-500 bg-blue-500' : 'border-gray-200 dark:border-white/20'}`}>
-                      {selectedTemplate === t.id && (
-                        <svg viewBox="0 0 12 12" className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M2 6l3 3 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* Create Button */}
+            {/* GitHub Auto-link */}
+            {githubToken && githubUser && (
+              <div className="mb-8">
+                <label className="flex items-center space-x-3 cursor-pointer group">
+                  <div className="relative flex items-center justify-center">
+                    <input 
+                      type="checkbox" 
+                      className="peer sr-only"
+                      checked={linkGitHub}
+                      onChange={(e) => setLinkGitHub(e.target.checked)}
+                    />
+                    <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 rounded-md peer-checked:bg-blue-500 peer-checked:border-blue-500 transition-colors" />
+                    <svg viewBox="0 0 14 10" className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 5l4 4 8-8" />
+                    </svg>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Github size={18} className="text-gray-700 dark:text-gray-300" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                      Create Private GitHub Repository
+                    </span>
+                  </div>
+                </label>
+              </div>
+            )}
+
             <button 
               onClick={handleCreate}
-              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-[0.98] transition-all duration-300 premium-glow ${isGlassmorphismEnabled ? 'bg-gray-900 text-white dark:bg-white dark:text-black shadow-gray-900/10 dark:shadow-white/10' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+              disabled={isCreating}
+              className="w-full py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-[0.98] transition-all duration-300 bg-blue-600 text-white hover:bg-blue-700 mt-4 flex items-center justify-center space-x-2 disabled:opacity-70"
             >
-              Create Project
+              {isCreating ? (
+                <>
+                  <Loader2 size={22} className="animate-spin" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                <span>Create Project</span>
+              )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Clone Repository Modal */}
+      {showCloneRepo && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/80 animate-fade-in" onClick={() => setShowCloneRepo(false)} />
+          
+          <div className="relative w-full max-w-2xl sm:border rounded-t-[2rem] sm:rounded-[2rem] p-6 max-h-[85vh] flex flex-col animate-slide-up shadow-2xl bg-white dark:bg-[#111] border-gray-200 dark:border-[#222]">
+            <div className="flex items-center justify-between mb-4 flex-shrink-0">
+              <h2 className="text-xl font-bold tracking-tight flex items-center space-x-2 text-gray-900 dark:text-white/90">
+                <Github size={24} />
+                <span>Clone from GitHub</span>
+              </h2>
+              <button 
+                onClick={() => setShowCloneRepo(false)} 
+                className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors active:bg-gray-200 dark:active:bg-white/20"
+              >
+                <X size={22} className="text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            {!githubToken ? (
+              <div className="text-center py-12 flex-1">
+                <Github size={48} className="mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-bold mb-2">GitHub Not Connected</h3>
+                <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">
+                  To clone repositories, you first need to connect your GitHub account in the Source Control panel.
+                </p>
+                <button
+                  onClick={() => setShowCloneRepo(false)}
+                  className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="mb-4">
+                  <input
+                    value={cloneSearch}
+                    onChange={(e) => setCloneSearch(e.target.value)}
+                    placeholder="Search your repositories..."
+                    className="w-full bg-gray-50 dark:bg-[#050505]/50 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white text-base placeholder-gray-400 dark:placeholder-gray-600 focus:border-blue-500/70 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+                
+                <div className="flex-1 overflow-y-auto min-h-[300px] border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-[#1a1a1a]">
+                  {loadingRepos ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 size={24} className="animate-spin text-gray-500" />
+                    </div>
+                  ) : repos.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No matching repositories found.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-200 dark:divide-white/5">
+                      {repos
+                        .filter(r => r.name.toLowerCase().includes(cloneSearch.toLowerCase()) || r.full_name.toLowerCase().includes(cloneSearch.toLowerCase()))
+                        .map(repo => (
+                        <div key={repo.full_name} className="flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
+                          <div className="flex-1 min-w-0 mr-4">
+                            <h4 className="font-semibold text-gray-900 dark:text-white text-base truncate">{repo.name}</h4>
+                            <p className="text-gray-500 text-xs truncate mt-0.5">{repo.full_name}</p>
+                          </div>
+                          <button
+                            onClick={() => handleClone(repo)}
+                            disabled={isCloning !== null}
+                            className="bg-[#2ea043] hover:bg-[#2c974b] text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center space-x-2 disabled:opacity-50 transition-colors shrink-0"
+                          >
+                            {isCloning === repo.full_name ? <Loader2 size={16} className="animate-spin" /> : <MonitorPlay size={16} />}
+                            <span>{isCloning === repo.full_name ? 'Cloning...' : 'Clone'}</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

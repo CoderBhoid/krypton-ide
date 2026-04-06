@@ -112,7 +112,7 @@ export function CommandPalette({ onRunProject, onBackToProjects }: CommandPalett
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] sm:pt-[10vh]">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCommandPaletteOpen(false)} />
+      <div className="absolute inset-0 bg-black/50" onClick={() => setCommandPaletteOpen(false)} />
       
       <div className="relative w-[95%] max-w-lg bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-scale-in">
         {/* Search Input */}

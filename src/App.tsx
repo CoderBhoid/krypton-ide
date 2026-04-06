@@ -1,17 +1,87 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { ProjectsDashboard } from './components/projects/ProjectsDashboard';
+import { FolderPicker } from './components/projects/FolderPicker';
 import { IdeLayout } from './components/layout/IdeLayout';
 import { useProjectsStore } from './store/useProjectsStore';
 import { useIdeStore } from './store/useIdeStore';
+import { useAiStore } from './store/useAiStore';
+import { useAuthStore } from './store/useAuthStore';
+import { useExtensionsStore } from './store/useExtensionsStore';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { App as CapApp } from '@capacitor/app';
 import { Keyboard } from '@capacitor/keyboard';
+import { useBuildStore } from './store/useBuildStore';
+import {
+  isStorageInitialized,
+  readConfig,
+  saveConfigNow,
+  writeProjectFiles,
+} from './lib/fileSystemStorage';
 
 export default function App() {
   const { currentProjectId, projects, closeProject } = useProjectsStore();
-  const { loadProject, theme } = useIdeStore();
+  const { loadProject, theme, isHapticsEnabled } = useIdeStore();
+  const [storageReady, setStorageReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // ── Check if storage is initialized ──
+  useEffect(() => {
+    async function boot() {
+      if (!isStorageInitialized()) {
+        // No base path set — show FolderPicker
+        setIsLoading(false);
+        return;
+      }
+
+      // Storage is already initialized — load all data from disk
+      setStorageReady(true);
+      try {
+        // Load config first
+        const config = await readConfig();
+        if (config) {
+          useIdeStore.getState().setTheme(config.theme || 'vs-dark');
+          useIdeStore.getState().setHaptics(config.haptics !== false);
+        }
+
+        // Load all stores from disk in parallel
+        await Promise.all([
+          useProjectsStore.getState().loadFromDisk(),
+          useAiStore.getState().loadFromDisk(),
+          useAuthStore.getState().loadFromDisk(),
+          useExtensionsStore.getState().loadFromDisk(),
+        ]);
+      } catch (e) {
+        console.error('[App] Boot error:', e);
+      }
+      setIsLoading(false);
+    }
+    boot();
+  }, [storageReady]);
+
+  // ── Handle FolderPicker completion ──
+  const handleStorageReady = useCallback(async () => {
+    setStorageReady(true);
+    setIsLoading(true);
+
+    // Load config to check welcomed state
+    const config = await readConfig();
+    if (config) {
+      useIdeStore.getState().setTheme(config.theme || 'vs-dark');
+      useIdeStore.getState().setHaptics(config.haptics !== false);
+    }
+
+    // Load stores
+    await Promise.all([
+      useProjectsStore.getState().loadFromDisk(),
+      useAiStore.getState().loadFromDisk(),
+      useAuthStore.getState().loadFromDisk(),
+      useExtensionsStore.getState().loadFromDisk(),
+    ]);
+
+    setIsLoading(false);
+  }, []);
 
   // ── Global Theme Injector ──
   useEffect(() => {
@@ -23,12 +93,27 @@ export default function App() {
     }
   }, [theme]);
 
-  // When a project is opened, load its files into the IDE store
   useEffect(() => {
     if (currentProjectId && projects[currentProjectId]) {
       loadProject(projects[currentProjectId].files);
     }
   }, [currentProjectId]);
+
+  // ── Global Build Status Poller ──
+  const { buildStatus, pollStatus } = useBuildStore();
+  useEffect(() => {
+    let interval: any;
+    const project = currentProjectId ? projects[currentProjectId] : null;
+    
+    if (buildStatus === 'building' && project?.githubRepo) {
+      const [owner, repoName] = project.githubRepo.split('/');
+      interval = setInterval(() => {
+        pollStatus(owner, repoName);
+      }, 5000);
+    }
+    
+    return () => clearInterval(interval);
+  }, [buildStatus, currentProjectId, projects, pollStatus]);
 
   // ── Capacitor native initialization ──
   useEffect(() => {
@@ -73,13 +158,31 @@ export default function App() {
     };
   }, []);
 
-  // ── Auto-save: sync IDE files back to project store ──
-  const saveCurrentProject = useCallback(() => {
+  // ── Auto-save: sync IDE files back to project store + disk ──
+  const saveCurrentProject = useCallback(async () => {
     const pid = useProjectsStore.getState().currentProjectId;
     if (!pid) return;
     const currentFiles = useIdeStore.getState().files;
     if (Object.keys(currentFiles).length > 0) {
       useProjectsStore.getState().updateProjectFiles(pid, currentFiles);
+      // Also write files directly to disk (immediate, not debounced)
+      try {
+        await writeProjectFiles(pid, currentFiles);
+      } catch (e) {
+        console.error('[App] Save project to disk error:', e);
+      }
+    }
+
+    // Also persist config (theme, haptics, etc.)
+    try {
+      const config = await readConfig();
+      if (config) {
+        config.theme = useIdeStore.getState().theme;
+        config.haptics = useIdeStore.getState().isHapticsEnabled;
+        await saveConfigNow(config);
+      }
+    } catch (e) {
+      console.error('[App] Save config error:', e);
     }
   }, []);
 
@@ -112,10 +215,45 @@ export default function App() {
     };
   }, [saveCurrentProject]);
 
+  // ── Persist theme and haptics changes to config ──
+  useEffect(() => {
+    if (!storageReady) return;
+    const persistSettings = async () => {
+      try {
+        const config = await readConfig();
+        if (config) {
+          config.theme = theme;
+          config.haptics = isHapticsEnabled;
+          await saveConfigNow(config);
+        }
+      } catch (e) {
+        console.error('[App] Persist settings error:', e);
+      }
+    };
+    persistSettings();
+  }, [theme, isHapticsEnabled, storageReady]);
+
   const handleBackToProjects = () => {
     saveCurrentProject();
     closeProject();
   };
+
+  // ── Loading state ──
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-[#050505] flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-500 text-sm">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── FolderPicker gate ──
+  if (!storageReady) {
+    return <FolderPicker onComplete={handleStorageReady} />;
+  }
 
   if (!currentProjectId) {
     return <ProjectsDashboard />;

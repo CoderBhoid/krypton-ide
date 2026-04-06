@@ -27,11 +27,16 @@ interface IdeState {
   cursorPosition: CursorPosition;
   isPreviewOpen: boolean;
   isCommandPaletteOpen: boolean;
-  isFullscreen: boolean;
-  isGlassmorphismEnabled: boolean;
+  aiMessages: { role: 'user' | 'assistant' | 'system'; content: string }[];
+  isAiLoading: boolean;
+  isAiFullscreen: boolean;
   isHapticsEnabled: boolean;
+  runTarget: 'java' | 'wasm' | 'js';
   
   // Actions
+  setAiFullscreen: (fullscreen: boolean) => void;
+  setAiMessages: (messages: { role: 'user' | 'assistant' | 'system'; content: string }[]) => void;
+  setAiLoading: (loading: boolean) => void;
   createFile: (name: string, parentId: string | null, type: 'file' | 'folder', content?: string) => string;
   updateFileContent: (id: string, content: string) => void;
   deleteFile: (id: string) => void;
@@ -45,9 +50,8 @@ interface IdeState {
   setCursorPosition: (pos: CursorPosition) => void;
   setPreviewOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
-  setFullscreen: (val: boolean) => void;
-  setGlassmorphism: (val: boolean) => void;
   setHaptics: (val: boolean) => void;
+  setRunTarget: (target: 'java' | 'wasm' | 'js') => void;
   
   // Save
   saveFile: (id: string) => void;
@@ -66,6 +70,14 @@ interface IdeState {
 
 export const getLanguageFromFilename = (name: string): string => {
   const ext = name.split('.').pop()?.toLowerCase();
+  // Handle special filenames first
+  const lowerName = name.toLowerCase();
+  if (lowerName === 'dockerfile') return 'dockerfile';
+  if (lowerName === 'makefile') return 'makefile';
+  if (lowerName === '.gitignore' || lowerName === '.gitattributes') return 'ini';
+  if (lowerName === 'cargo.toml' || lowerName === 'cargo.lock') return 'toml';
+  if (lowerName.endsWith('.gradle') || lowerName.endsWith('.gradle.kts')) return 'groovy';
+
   switch (ext) {
     case 'js': case 'jsx': return 'javascript';
     case 'ts': case 'tsx': return 'typescript';
@@ -76,17 +88,27 @@ export const getLanguageFromFilename = (name: string): string => {
     case 'py': return 'python';
     case 'rs': return 'rust';
     case 'go': return 'go';
-    case 'java': return 'java';
+    case 'java': case 'aidl': return 'java';
     case 'kt': case 'kts': return 'kotlin';
-    case 'cpp': case 'c': case 'h': case 'hpp': return 'cpp';
-    case 'xml': case 'svg': return 'xml';
+    case 'cpp': case 'c': case 'h': case 'hpp': case 'cc': case 'cxx': return 'cpp';
+    case 'xml': case 'svg': case 'plist': return 'xml';
     case 'yaml': case 'yml': return 'yaml';
-    case 'sh': case 'bash': return 'shell';
+    case 'sh': case 'bash': case 'zsh': return 'shell';
     case 'sql': return 'sql';
     case 'php': return 'php';
     case 'rb': return 'ruby';
     case 'swift': return 'swift';
     case 'dart': return 'dart';
+    case 'groovy': case 'gradle': return 'groovy';
+    case 'toml': return 'toml';
+    case 'ini': case 'cfg': case 'conf': case 'pro': return 'ini';
+    case 'lua': return 'lua';
+    case 'r': return 'r';
+    case 'pl': case 'pm': return 'perl';
+    case 'dockerfile': return 'dockerfile';
+    case 'graphql': case 'gql': return 'graphql';
+    case 'proto': return 'protobuf';
+    case 'tf': return 'hcl';
     default: return 'plaintext';
   }
 };
@@ -104,9 +126,14 @@ export const useIdeStore = create<IdeState>()(
     cursorPosition: { line: 1, col: 1 },
     isPreviewOpen: false,
     isCommandPaletteOpen: false,
-    isFullscreen: localStorage.getItem('krypton-fullscreen') === 'true',
-    isGlassmorphismEnabled: localStorage.getItem('krypton-glassmorphism') !== 'false',
-    isHapticsEnabled: localStorage.getItem('krypton-haptics') !== 'false',
+    aiMessages: [],
+    isAiLoading: false,
+    isAiFullscreen: false,
+
+    setAiFullscreen: (fullscreen) => set({ isAiFullscreen: fullscreen }),
+    setAiMessages: (messages) => set({ aiMessages: messages }),
+    setAiLoading: (loading) => set({ isAiLoading: loading }),
+    isHapticsEnabled: true,
 
     createFile: (name, parentId, type, content = '') => {
       const id = generateId();
@@ -242,19 +269,9 @@ export const useIdeStore = create<IdeState>()(
     setPreviewOpen: (open) => set({ isPreviewOpen: open }),
     setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
 
-    setFullscreen: (val) => {
-      localStorage.setItem('krypton-fullscreen', String(val));
-      set({ isFullscreen: val });
-    },
-    
-    setGlassmorphism: (val) => {
-      localStorage.setItem('krypton-glassmorphism', String(val));
-      set({ isGlassmorphismEnabled: val });
-    },
-
     setHaptics: (val) => {
-      localStorage.setItem('krypton-haptics', String(val));
       set({ isHapticsEnabled: val });
+      // Persistence is handled by App.tsx which watches this and writes to config
     },
 
     saveFile: (id) => {
@@ -384,7 +401,9 @@ export const useIdeStore = create<IdeState>()(
         segments.unshift(current.name);
         current = current.parentId ? files[current.parentId] : undefined as any;
       }
-      return segments;
+      saveConfigNow();
     },
+    runTarget: 'java',
+    setRunTarget: (target) => set({ runTarget: target }),
   })
 );

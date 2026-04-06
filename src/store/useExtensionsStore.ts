@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { readExtensions, saveExtensionsDebounced } from '../lib/fileSystemStorage';
 
 export interface Extension {
   id: string;
@@ -25,6 +25,7 @@ interface ExtensionsState {
   uninstallExtension: (id: string) => void;
   setActiveThemeExtension: (id: string | null) => void;
   isInstalled: (id: string) => boolean;
+  loadFromDisk: () => Promise<void>;
 }
 
 // Curated extensions catalog
@@ -420,35 +421,65 @@ export const MONACO_THEMES: Record<string, any> = {
   },
 };
 
+function persistExtensions(state: ExtensionsState) {
+  saveExtensionsDebounced({
+    installedExtensions: state.installedExtensions,
+    activeThemeExtension: state.activeThemeExtension,
+  });
+}
+
 export const useExtensionsStore = create<ExtensionsState>()(
-  persist(
-    (set, get) => ({
-      installedExtensions: [],
-      activeThemeExtension: null,
+  (set, get) => ({
+    installedExtensions: [],
+    activeThemeExtension: null,
 
-      installExtension: (id) => {
-        set((state) => ({
+    loadFromDisk: async () => {
+      try {
+        const data = await readExtensions();
+        if (data) {
+          set({
+            installedExtensions: data.installedExtensions || [],
+            activeThemeExtension: data.activeThemeExtension || null,
+          });
+        }
+      } catch (e) {
+        console.error('[Extensions] Failed to load from disk:', e);
+      }
+    },
+
+    installExtension: (id) => {
+      set((state) => {
+        const updated = {
+          ...state,
           installedExtensions: [...new Set([...state.installedExtensions, id])],
-        }));
-      },
+        };
+        persistExtensions(updated);
+        return { installedExtensions: updated.installedExtensions };
+      });
+    },
 
-      uninstallExtension: (id) => {
-        set((state) => ({
+    uninstallExtension: (id) => {
+      set((state) => {
+        const updated = {
+          ...state,
           installedExtensions: state.installedExtensions.filter(e => e !== id),
           activeThemeExtension: state.activeThemeExtension === id ? null : state.activeThemeExtension,
-        }));
-      },
+        };
+        persistExtensions(updated);
+        return {
+          installedExtensions: updated.installedExtensions,
+          activeThemeExtension: updated.activeThemeExtension,
+        };
+      });
+    },
 
-      setActiveThemeExtension: (id) => {
-        set({ activeThemeExtension: id });
-      },
+    setActiveThemeExtension: (id) => {
+      set({ activeThemeExtension: id });
+      persistExtensions(get());
+    },
 
-      isInstalled: (id) => {
-        return get().installedExtensions.includes(id);
-      },
-    }),
-    {
-      name: 'krypton-extensions-storage',
-    }
-  )
+    isInstalled: (id) => {
+      return get().installedExtensions.includes(id);
+    },
+  })
 );

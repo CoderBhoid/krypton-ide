@@ -8,9 +8,11 @@ import { formatCode } from '../../lib/formatter';
 import { useProblemsStore, extractMonacoProblems } from '../../store/useProblemsStore';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
+import { readConfig, readFontFile } from '../../lib/fileSystemStorage';
+import { getSnippetsForLanguage, getSnippetLanguages } from '../../lib/languageSnippets';
 
 export function CodeEditor() {
-  const { files, activeFileId, openFiles, closeFile, setActiveFile, updateFileContent, theme, setCursorPosition, isSidebarOpen, isGlassmorphismEnabled } = useIdeStore();
+  const { files, activeFileId, openFiles, closeFile, setActiveFile, updateFileContent, theme, setCursorPosition, isSidebarOpen } = useIdeStore();
   const [editorInstance, setEditorInstance] = useState<any>(null);
   const [mdViewMode, setMdViewMode] = useState<'edit' | 'preview' | 'split'>('split');
   const monaco = useMonaco();
@@ -20,6 +22,8 @@ export function CodeEditor() {
 
   // Selection floating toolbar state
   const [selectionMenu, setSelectionMenu] = useState<{ visible: boolean; top: number; left: number; text: string } | null>(null);
+  const [selectionBounds, setSelectionBounds] = useState<{ start: { top: number; left: number }, end: { top: number; left: number } } | null>(null);
+  const editorRef = useRef<any>(null);
 
   // Auto-save every 30 seconds
   useEffect(() => {
@@ -35,20 +39,27 @@ export function CodeEditor() {
   const activeFile = activeFileId ? files[activeFileId] : null;
   const isMarkdown = activeFile?.name?.endsWith('.md') || activeFile?.language === 'markdown';
 
-  // Restore custom font on startup
+  // Restore custom font on startup from filesystem config
   useEffect(() => {
-    const fontName = localStorage.getItem('krypton-custom-font-name');
-    const fontData = localStorage.getItem('krypton-custom-font-data');
-    if (fontName && fontData) {
-      const style = document.createElement('style');
-      style.textContent = `@font-face { font-family: '${fontName}'; src: url('${fontData}'); }`;
-      document.head.appendChild(style);
-      setTimeout(() => {
-        document.querySelectorAll('.monaco-editor').forEach(el => {
-          (el as HTMLElement).style.fontFamily = `'${fontName}', 'JetBrains Mono', monospace`;
-        });
-      }, 500);
+    async function loadFont() {
+      const config = await readConfig();
+      if (config?.activeFont) {
+        const fontName = config.activeFont;
+        const fontData = await readFontFile(fontName);
+        if (fontData) {
+          const style = document.createElement('style');
+          style.id = `krypton-font-${fontName}`;
+          style.textContent = `@font-face { font-family: '${fontName}'; src: url('${fontData}'); }`;
+          document.head.appendChild(style);
+          setTimeout(() => {
+            document.querySelectorAll('.monaco-editor').forEach(el => {
+              (el as HTMLElement).style.fontFamily = `'${fontName}', 'JetBrains Mono', monospace`;
+            });
+          }, 500);
+        }
+      }
     }
+    loadFont();
   }, []);
 
   // Cross-file IntelliSense & Sync
@@ -77,6 +88,58 @@ export function CodeEditor() {
       useProblemsStore.getState().setProblems(problems);
     }, 2000);
     return () => clearInterval(interval);
+  }, [monaco]);
+
+  // Register language snippets as completion providers
+  useEffect(() => {
+    if (!monaco) return;
+    const disposables: any[] = [];
+    const languages = getSnippetLanguages();
+
+    for (const lang of languages) {
+      const snippets = getSnippetsForLanguage(lang);
+      if (snippets.length === 0) continue;
+
+      // Map language names to Monaco language IDs
+      const monacoLangs: string[] = [];
+      if (lang === 'typescript') monacoLangs.push('typescript', 'javascript', 'typescriptreact', 'javascriptreact');
+      else if (lang === 'groovy') monacoLangs.push('groovy', 'plaintext'); // Gradle files may not have a groovy mode
+      else if (lang === 'cpp') monacoLangs.push('cpp', 'c');
+      else monacoLangs.push(lang);
+
+      for (const monacoLang of monacoLangs) {
+        try {
+          const disposable = monaco.languages.registerCompletionItemProvider(monacoLang, {
+            provideCompletionItems: (model: any, position: any) => {
+              const word = model.getWordUntilPosition(position);
+              const range = {
+                startLineNumber: position.lineNumber,
+                endLineNumber: position.lineNumber,
+                startColumn: word.startColumn,
+                endColumn: word.endColumn,
+              };
+
+              const suggestions = snippets.map((s) => ({
+                label: s.prefix,
+                kind: monaco.languages.CompletionItemKind.Snippet,
+                documentation: s.description,
+                insertText: s.body.replace(/\$0/g, '').replace(/\$\d/g, ''),
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                range,
+                detail: `⚡ ${s.description}`,
+              }));
+
+              return { suggestions };
+            },
+          });
+          disposables.push(disposable);
+        } catch {
+          // Language may not be registered in Monaco — skip
+        }
+      }
+    }
+
+    return () => disposables.forEach(d => d.dispose());
   }, [monaco]);
 
   // ── Keyboard-aware toolbar (rises with soft keyboard like SPCK) ──
@@ -108,6 +171,7 @@ export function CodeEditor() {
 
   const handleEditorMount = useCallback((editor: any, monacoApi: any) => {
     setEditorInstance(editor);
+    editorRef.current = editor;
     editor.onDidChangeCursorPosition((e: any) => {
       setCursorPosition({
         line: e.position.lineNumber,
@@ -117,25 +181,141 @@ export function CodeEditor() {
 
     // Custom text selection toolbar logic for mobile
     editor.onDidChangeCursorSelection((e: any) => {
-      const selection = e.selection;
-      if (!selection.isEmpty()) {
-        const text = editor.getModel().getValueInRange(selection);
-        // Get pixel coordinates of selection start to show the popup
-        const pos = editor.getScrolledVisiblePosition(selection.getStartPosition());
-        const domNode = editor.getDomNode();
-        if (pos && domNode) {
-          const rect = domNode.getBoundingClientRect();
-          setSelectionMenu({
-            visible: true,
-            text,
-            top: rect.top + pos.top - 40, // show slightly above
-            left: rect.left + pos.left
-          });
+      try {
+        const selection = e.selection;
+        if (!selection.isEmpty()) {
+          const model = editor.getModel();
+          if (!model) return;
+          const text = model.getValueInRange(selection);
+          const startPos = editor.getScrolledVisiblePosition(selection.getStartPosition());
+          const endPos = editor.getScrolledVisiblePosition(selection.getEndPosition());
+          const domNode = editor.getDomNode();
+          
+          if (startPos && endPos && domNode) {
+            const rect = domNode.getBoundingClientRect();
+            const isBelow = startPos.top < 60;
+            
+            setSelectionMenu({
+              visible: true,
+              text,
+              top: isBelow ? rect.top + startPos.top + 30 : rect.top + startPos.top - 50,
+              left: Math.min(Math.max(10, rect.left + startPos.left - 80), window.innerWidth - 250)
+            });
+
+            setSelectionBounds({
+              start: { top: rect.top + startPos.top, left: rect.left + startPos.left },
+              end: { top: rect.top + endPos.top + 18, left: rect.left + endPos.left }
+            });
+          }
+        } else {
+          setSelectionMenu(prev => (prev && prev.text === '') ? prev : null);
+          setSelectionBounds(null);
         }
-      } else {
-        setSelectionMenu(null);
+      } catch (err: any) {
+        if (err?.type !== 'cancelation') console.error('Selection update error:', err);
       }
     });
+
+    // Handle deselection on click outside
+    const handleGlobalTouch = (e: any) => {
+      if (!editorRef.current) return;
+      const target = e.target as HTMLElement;
+      if (target.closest('.selection-handle') || target.closest('.selection-menu')) return;
+      
+      // If it's a quick tap (not a scroll), clear selection
+      const pos = editorRef.current.getPosition();
+      if (pos) {
+        editorRef.current.setSelection({
+          startLineNumber: pos.lineNumber,
+          startColumn: pos.column,
+          endLineNumber: pos.lineNumber,
+          endColumn: pos.column
+        });
+      }
+    };
+
+    // Mobile: Long-press to select word
+    let touchTimer: any = null;
+    let startX = 0;
+    let startY = 0;
+    const MOVE_THRESHOLD = 15; // Allow 15px of drift for mobile stability
+    
+    const editorDom = editor.getDomNode();
+    if (editorDom) {
+      editorDom.addEventListener('touchstart', (e: any) => {
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        
+        touchTimer = setTimeout(() => {
+          try {
+            const target = editor.getTargetAtClientPoint(touch.clientX, touch.clientY);
+            if (target && target.position) {
+              const model = editor.getModel();
+              if (!model) return;
+              const word = model.getWordAtPosition(target.position);
+              if (word) {
+                editor.setSelection({
+                  startLineNumber: target.position.lineNumber,
+                  startColumn: word.startColumn,
+                  endLineNumber: target.position.lineNumber,
+                  endColumn: word.endColumn
+                });
+                if (Capacitor.isNativePlatform()) {
+                  Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+                }
+              } else {
+                // Even if no word, still place cursor and show menu for global actions (paste/select all)
+                editor.setPosition(target.position);
+                const pos = editor.getScrolledVisiblePosition(target.position);
+                const domNode = editor.getDomNode();
+                if (pos && domNode) {
+                   const rect = domNode.getBoundingClientRect();
+                   const isBelow = pos.top < 60;
+                   setSelectionMenu({
+                     visible: true,
+                     text: '',
+                     top: isBelow ? rect.top + pos.top + 30 : rect.top + pos.top - 50,
+                     left: Math.min(Math.max(10, rect.left + pos.left - 80), window.innerWidth - 250)
+                   });
+                }
+                if (Capacitor.isNativePlatform()) {
+                  Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+                }
+              }
+            }
+          } catch (err: any) {
+            if (err?.type !== 'cancelation') console.error('Long press error:', err);
+          }
+        }, 500);
+      }, { passive: true });
+
+      editorDom.addEventListener('touchend', () => {
+        if (touchTimer) clearTimeout(touchTimer);
+      }, { passive: true });
+
+      editorDom.addEventListener('touchmove', (e: any) => {
+        if (!e.touches[0]) return;
+        const moveX = Math.abs(e.touches[0].clientX - startX);
+        const moveY = Math.abs(e.touches[0].clientY - startY);
+        // Only clear if movement exceeds threshold
+        if (moveX > MOVE_THRESHOLD || moveY > MOVE_THRESHOLD) {
+          if (touchTimer) clearTimeout(touchTimer);
+        }
+      }, { passive: true });
+    }
+
+    // Attach global deselection listener
+    const container = editor.getDomNode()?.parentElement;
+    if (container) {
+      let isScrolling = false;
+      container.addEventListener('touchstart', () => { isScrolling = false; }, { passive: true });
+      container.addEventListener('touchmove', () => { isScrolling = true; }, { passive: true });
+      container.addEventListener('touchend', (e) => {
+        if (!isScrolling) handleGlobalTouch(e);
+      }, { passive: true });
+    }
 
     // Configure Advanced IntelliSense for React/TSX
     monacoApi.languages.typescript.typescriptDefaults.setCompilerOptions({
@@ -160,46 +340,110 @@ export function CodeEditor() {
       reactNamespace: 'React',
     });
 
+    // Configure CSS diagnostics to ignore tailwind v4 '@theme'
+    monacoApi.languages.css.cssDefaults.setOptions({
+      lint: {
+        unknownAtRules: 'ignore'
+      }
+    });
+
     // Add Prettier Format Command (Shift+Alt+F)
     editor.addCommand(monacoApi.KeyMod.Shift | monacoApi.KeyMod.Alt | monacoApi.KeyCode.KeyF, async () => {
-      const state = useIdeStore.getState();
-      const currentFile = state.files[state.activeFileId!];
-      if (currentFile && currentFile.content) {
-        const formatted = await formatCode(currentFile.content, currentFile.language || 'plaintext');
-        if (formatted && formatted !== currentFile.content) {
-           editor.executeEdits('prettier', [{
-            range: editor.getModel().getFullModelRange(),
-            text: formatted,
-            forceMoveMarkers: true
-          }]);
-          state.updateFileContent(state.activeFileId!, formatted);
+      try {
+        const state = useIdeStore.getState();
+        const currentFile = state.files[state.activeFileId!];
+        if (currentFile && currentFile.content) {
+          const formatted = await formatCode(currentFile.content, currentFile.language || 'plaintext');
+          const model = editor.getModel();
+          if (model && formatted && formatted !== currentFile.content) {
+             editor.executeEdits('prettier', [{
+              range: model.getFullModelRange(),
+              text: formatted,
+              forceMoveMarkers: true
+            }]);
+            state.updateFileContent(state.activeFileId!, formatted);
+          }
         }
+      } catch (err: any) {
+        if (err?.type !== 'cancelation') console.error('Format error:', err);
       }
     });
 
   }, [setCursorPosition]);
 
   const insertText = (text: string) => {
-    if (editorInstance) {
-      editorInstance.trigger('keyboard', 'type', { text });
-      editorInstance.focus();
+    if (editorRef.current) {
+      editorRef.current.trigger('keyboard', 'type', { text });
+      editorRef.current.focus();
     }
   };
 
-  const handleSelectionAction = async (action: 'cut' | 'copy' | 'paste' | 'ai') => {
-    if (!editorInstance || !selectionMenu) return;
+  const handleHandleDrag = (e: React.TouchEvent, side: 'start' | 'end') => {
+    try {
+      const touch = e.touches[0];
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      const target = editor.getTargetAtClientPoint(touch.clientX, touch.clientY);
+      if (target && target.position) {
+        const selection = editor.getSelection();
+        if (!selection) return;
+
+        if (side === 'start') {
+          editor.setSelection({
+            startLineNumber: target.position.lineNumber,
+            startColumn: target.position.column,
+            endLineNumber: selection.endLineNumber,
+            endColumn: selection.endColumn
+          });
+        } else {
+          editor.setSelection({
+            startLineNumber: selection.startLineNumber,
+            startColumn: selection.startColumn,
+            endLineNumber: target.position.lineNumber,
+            endColumn: target.position.column
+          });
+        }
+        
+        // Auto-scroll logic when dragging near boundaries
+        const domNode = editor.getDomNode();
+        if (domNode) {
+          const rect = domNode.getBoundingClientRect();
+          const scrollSpeed = 15;
+          if (touch.clientY < rect.top + 60) {
+            editor.setScrollTop(editor.getScrollTop() - scrollSpeed);
+          } else if (touch.clientY > rect.bottom - 60) {
+            editor.setScrollTop(editor.getScrollTop() + scrollSpeed);
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err?.type !== 'cancelation') console.error('Drag selection error:', err);
+    }
+  };
+
+  const handleSelectionAction = async (action: string) => {
+    if (!editorRef.current || !selectionMenu) return;
+    const editorInstance = editorRef.current;
     
-    if (action === 'copy') {
-      await navigator.clipboard.writeText(selectionMenu.text);
+    if (action === 'cut') {
+      const text = selectionMenu.text;
+      await navigator.clipboard.writeText(text);
+      editorInstance.executeEdits('clipboard', [{
+        range: editorInstance.getSelection(),
+        text: '',
+        forceMoveMarkers: true
+      }]);
       setSelectionMenu(null);
-    } else if (action === 'cut') {
+    } else if (action === 'copy') {
       await navigator.clipboard.writeText(selectionMenu.text);
-      editorInstance.trigger('keyboard', 'cut', {});
       setSelectionMenu(null);
     } else if (action === 'paste') {
       const text = await navigator.clipboard.readText();
       editorInstance.trigger('keyboard', 'paste', { text });
       setSelectionMenu(null);
+    } else if (action === 'selectAll') {
+      editorInstance.setSelection(editorInstance.getModel().getFullModelRange());
     } else if (action === 'ai') {
       window.dispatchEvent(new CustomEvent('krypton-send-to-agent', { 
         detail: { text: `Explain or modify this code:\n\`\`\`\n${selectionMenu.text}\n\`\`\`\n` } 
@@ -218,7 +462,7 @@ export function CodeEditor() {
     <div className="flex h-full flex-col bg-white dark:bg-[#1e1e1e]">
       {/* Editor Tabs */}
       {openFiles.length > 0 && (
-        <div className={`flex h-9 overflow-x-auto scrollbar-hide flex-shrink-0 border-b border-gray-200 dark:border-[#1a1a1a] ${isGlassmorphismEnabled ? 'glass-panel z-10' : 'bg-gray-100 dark:bg-[#252526]'}`}>
+        <div className="flex h-9 overflow-x-auto scrollbar-hide flex-shrink-0 border-b border-gray-200 dark:border-[#1a1a1a] bg-gray-100 dark:bg-[#252526]">
           {openFiles.map(fileId => {
             const file = files[fileId];
             if (!file) return null;
@@ -336,6 +580,13 @@ export function CodeEditor() {
                         scrollBeyondLastLine: false,
                         lineNumbers: 'on',
                         renderLineHighlight: 'line',
+                        contextmenu: false,
+                        quickSuggestions: false,
+                        occurrencesHighlight: 'off',
+                        selectionHighlight: false,
+                        hover: { enabled: false },
+                        parameterHints: { enabled: false },
+                        lightbulb: { enabled: false },
                       }}
                     />
                   </div>
@@ -378,6 +629,13 @@ export function CodeEditor() {
                     overviewRulerBorder: false,
                     hideCursorInOverviewRuler: true,
                     suggest: { showKeywords: true, showSnippets: true },
+                    contextmenu: false,
+                    quickSuggestions: false,
+                    occurrencesHighlight: 'off',
+                    selectionHighlight: false,
+                    hover: { enabled: false },
+                    parameterHints: { enabled: false },
+                    lightbulb: { enabled: false },
                   }}
                   loading={
                     <div className="flex h-full items-center justify-center text-gray-500">
@@ -392,7 +650,7 @@ export function CodeEditor() {
                 {!isSidebarOpen && (
                 <div 
                   ref={toolbarRef}
-                  className={`md:hidden fixed left-0 right-0 border-t flex overflow-x-auto scrollbar-hide py-2 px-2 space-x-1.5 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.4)] transition-[bottom] duration-150 ease-out ${isGlassmorphismEnabled ? 'glass-panel border-gray-200 dark:border-white/5' : 'bg-gray-100 dark:bg-[#252526] border-gray-200 dark:border-[#3c3c3c]'}`}
+                  className="md:hidden fixed left-0 right-0 border-t flex overflow-x-auto scrollbar-hide py-2 px-2 space-x-1.5 z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.4)] transition-[bottom] duration-150 ease-out bg-gray-100 dark:bg-[#252526] border-gray-200 dark:border-[#3c3c3c]"
                   style={{ bottom: keyboardHeight > 0 ? `${keyboardHeight}px` : 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
                 >
                   <div className="flex items-center justify-center px-1.5 text-gray-500 flex-shrink-0"><Keyboard size={15}/></div>
@@ -403,7 +661,7 @@ export function CodeEditor() {
                         e.preventDefault(); 
                         insertText(k === 'Tab' ? '  ' : k);
                         // Haptic feedback on native if enabled
-                        if (Capacitor.isNativePlatform() && localStorage.getItem('krypton-haptics') !== 'false') {
+                        if (Capacitor.isNativePlatform() && useIdeStore.getState().isHapticsEnabled) {
                           Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
                         }
                       }} 
@@ -417,27 +675,62 @@ export function CodeEditor() {
               </>
             )}
             
+            {/* Selection Handles */}
+            {selectionBounds && (
+              <>
+                {/* Start Handle */}
+                <div 
+                  className="selection-handle fixed z-[55] w-0.5 bg-blue-500 flex flex-col items-center pointer-events-auto shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                  style={{
+                    top: `${selectionBounds.start.top - 18}px`,
+                    left: `${selectionBounds.start.left}px`,
+                    height: '22px'
+                  }}
+                  onTouchMove={(e) => handleHandleDrag(e, 'start')}
+                >
+                  <div className="w-3.5 h-3.5 bg-blue-500 rounded-full -mt-1 shadow-lg active:scale-125 transition-transform" />
+                </div>
+                {/* End Handle */}
+                <div 
+                  className="selection-handle fixed z-[55] w-0.5 bg-blue-500 flex flex-col items-center pointer-events-auto shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                  style={{
+                    top: `${selectionBounds.end.top - 4}px`,
+                    left: `${selectionBounds.end.left}px`,
+                    height: '22px'
+                  }}
+                  onTouchMove={(e) => handleHandleDrag(e, 'end')}
+                >
+                  <div className="w-3.5 h-3.5 bg-blue-500 rounded-full mt-auto shadow-lg active:scale-125 transition-transform" />
+                </div>
+              </>
+            )}
+
             {/* Floating Selection Toolbar */}
             {selectionMenu && selectionMenu.visible && (
               <div 
-                className="fixed z-[60] flex items-center space-x-1 bg-[#252526] border border-[#3c3c3c] rounded-xl shadow-2xl p-1 animate-context-pop pointer-events-auto"
+                className="fixed z-[60] flex items-center bg-[#252526] border border-[#3c3c3c] rounded-2xl shadow-2xl overflow-hidden animate-context-pop pointer-events-auto"
                 style={{
                   top: `${Math.max(50, selectionMenu.top)}px`,
-                  left: `${Math.min(Math.max(10, selectionMenu.left), window.innerWidth - 200)}px` // keep on screen
+                  left: `${selectionMenu.left}px`
                 }}
               >
-                <button onTouchStart={() => handleSelectionAction('cut')} onClick={() => handleSelectionAction('cut')} className="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors">
-                  <Scissors size={14} /> <span>Cut</span>
-                </button>
-                <button onTouchStart={() => handleSelectionAction('copy')} onClick={() => handleSelectionAction('copy')} className="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors border-l border-[#3c3c3c]">
-                  <Copy size={14} /> <span>Copy</span>
-                </button>
-                <button onTouchStart={() => handleSelectionAction('paste')} onClick={() => handleSelectionAction('paste')} className="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors border-l border-[#3c3c3c]">
-                  <ClipboardPaste size={14} /> <span>Paste</span>
-                </button>
-                <button onTouchStart={() => handleSelectionAction('ai')} onClick={() => handleSelectionAction('ai')} className="flex items-center space-x-1.5 px-3 py-1.5 hover:bg-[#32204c] text-purple-400 hover:text-purple-300 rounded-lg transition-colors border-l border-[#3c3c3c]">
-                  <Bot size={14} /> <span>AI</span>
-                </button>
+                <div className="flex h-10 items-center divide-x divide-[#3c3c3c]">
+                  <button onClick={() => handleSelectionAction('cut')} className="flex items-center space-x-1.5 px-3 h-full hover:bg-white/10 text-[11px] font-bold text-gray-300 hover:text-white transition-colors">
+                    <Scissors size={14} /> <span>Cut</span>
+                  </button>
+                  <button onClick={() => handleSelectionAction('copy')} className="flex items-center space-x-1.5 px-3 h-full hover:bg-white/10 text-[11px] font-bold text-gray-300 hover:text-white transition-colors">
+                    <Copy size={14} /> <span>Copy</span>
+                  </button>
+                  <button onClick={() => handleSelectionAction('paste')} className="flex items-center space-x-1.5 px-3 h-full hover:bg-white/10 text-[11px] font-bold text-gray-300 hover:text-white transition-colors">
+                    <ClipboardPaste size={14} /> <span>Paste</span>
+                  </button>
+                  <button onClick={() => handleSelectionAction('selectAll')} className="flex items-center space-x-1.5 px-3 h-full hover:bg-white/10 text-[11px] font-bold text-gray-300 hover:text-white transition-colors uppercase tracking-tighter">
+                    <span>Select All</span>
+                  </button>
+                  <button onClick={() => handleSelectionAction('ai')} className="flex items-center space-x-1.5 px-4 h-full bg-[#32204c] text-purple-400 hover:text-purple-300 text-[11px] font-bold transition-colors">
+                    <Bot size={14} /> <span>AI Agent</span>
+                  </button>
+                </div>
               </div>
             )}
           </>
