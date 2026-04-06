@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronUp, ChevronDown, Trash2, Send, AlertCircle, AlertTriangle, Info, Filter, Package } from 'lucide-react';
 import { TerminalPanel } from './TerminalPanel';
-import { BuildPanel } from '../build/BuildPanel';
 import { useOutputStore } from '../../store/useOutputStore';
 import { useProblemsStore } from '../../store/useProblemsStore';
 import { useIdeStore } from '../../store/useIdeStore';
