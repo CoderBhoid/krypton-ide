@@ -18,7 +18,14 @@ import {
   saveSession,
   deleteSessionFile,
   type KryptonConfig,
+  type SavedModel,
 } from '../lib/fileSystemStorage';
+
+export interface AttachedFile {
+  name: string;
+  type: string; // mimeType
+  data: string; // base64
+}
 
 export interface Message {
   role: 'user' | 'assistant' | 'tool' | 'system';
@@ -28,6 +35,7 @@ export interface Message {
   tool_call_id?: string;
   name?: string;
   tool_calls?: any[];
+  attachments?: AttachedFile[];
 }
 
 export interface ChatSession {
@@ -52,12 +60,20 @@ interface AiState {
   apiKey: string;
   model: string;
   baseUrl: string;
+  baseUrl: string;
+  
+  savedModels: SavedModel[];
+  activeModelId?: string;
   
   // Actions
   setProvider: (p: string) => void;
   setApiKey: (k: string) => void;
   setModel: (m: string) => void;
   setBaseUrl: (url: string) => void;
+  addSavedModel: (model: SavedModel) => void;
+  removeSavedModel: (id: string) => void;
+  updateSavedModel: (id: string, updates: Partial<SavedModel>) => void;
+  setActiveSavedModel: (id: string) => void;
   
   setActiveSession: (id: string) => void;
   addMessage: (sessionId: string, msg: Message) => void;
@@ -75,16 +91,24 @@ interface AiState {
   clearSessions: () => void;
   
   // The Engine
-  sendMessage: (sessionId: string, userPrompt: string, systemContext: string) => Promise<void>;
+  // The Engine
+  sendMessage: (sessionId: string, userPrompt: string, systemContext: string, attachments?: AttachedFile[]) => Promise<void>;
   handleRecursiveChat: (sessionId: string, provider: string, key: string, model: string, baseUrl: string, systemContext: string, startTime: number) => Promise<void>;
   abortChat: () => void;
 }
 
 // Helper to persist config changes
-async function persistAiConfig(provider: string, model: string, activeSessionId: string | null) {
+async function persistAiConfig(state: AiState) {
   const config = await readConfig();
   if (config) {
-    config.ai = { provider, model, activeSessionId };
+    config.ai = {
+      ...config.ai,
+      provider: state.provider,
+      model: state.model,
+      activeSessionId: state.activeSessionId,
+      savedModels: state.savedModels,
+      activeModelId: state.activeModelId,
+    };
     saveConfigDebounced(config);
   }
 }
@@ -101,6 +125,8 @@ export const useAiStore = create<AiState>()((set, get) => ({
   apiKey: '',
   model: 'gpt-4o',
   baseUrl: '',
+  savedModels: [],
+  activeModelId: undefined,
 
   loadFromDisk: async (projectId?: string) => {
     try {
@@ -110,6 +136,8 @@ export const useAiStore = create<AiState>()((set, get) => ({
         set({
           provider: config.ai.provider || 'openai',
           model: config.ai.model || 'gpt-4o',
+          savedModels: config.ai.savedModels || [],
+          activeModelId: config.ai.activeModelId,
         });
       }
 
@@ -151,8 +179,7 @@ export const useAiStore = create<AiState>()((set, get) => ({
 
   setProvider: (p) => {
     set({ provider: p });
-    const { model, activeSessionId } = get();
-    persistAiConfig(p, model, activeSessionId);
+    persistAiConfig(get());
   },
   setApiKey: (apiKey) => {
     set({ apiKey });
@@ -160,10 +187,46 @@ export const useAiStore = create<AiState>()((set, get) => ({
   },
   setModel: (m) => {
     set({ model: m });
-    const { provider, activeSessionId } = get();
-    persistAiConfig(provider, m, activeSessionId);
+    persistAiConfig(get());
   },
   setBaseUrl: (baseUrl) => set({ baseUrl }),
+  
+  addSavedModel: (model) => {
+    set(state => ({ savedModels: [...state.savedModels, model] }));
+    persistAiConfig(get());
+  },
+  removeSavedModel: (id) => {
+    set(state => {
+      const remaining = state.savedModels.filter(m => m.id !== id);
+      const nextActiveId = state.activeModelId === id ? undefined : state.activeModelId;
+      return { savedModels: remaining, activeModelId: nextActiveId };
+    });
+    persistAiConfig(get());
+  },
+  updateSavedModel: (id, updates) => {
+    set(state => ({
+      savedModels: state.savedModels.map(m => m.id === id ? { ...m, ...updates } : m)
+    }));
+    persistAiConfig(get());
+  },
+  setActiveSavedModel: (id) => {
+    const saved = get().savedModels.find(m => m.id === id);
+    if (saved) {
+      set({
+        activeModelId: id,
+        provider: saved.provider,
+        model: saved.model,
+        baseUrl: saved.baseUrl || '',
+      });
+      // Optionally also update apiKey if it carries one, 
+      // but apiKey is usually loaded globally, so setting the local state is fine.
+      if (saved.apiKey) {
+        set({ apiKey: saved.apiKey });
+        saveApiKey(saved.apiKey).catch(e => console.error('[AI] Save API key error:', e));
+      }
+      persistAiConfig(get());
+    }
+  },
   abortChat: () => {
     const { abortController } = get();
     if (abortController) {
@@ -174,8 +237,7 @@ export const useAiStore = create<AiState>()((set, get) => ({
 
   setActiveSession: (id) => {
     set({ activeSessionId: id });
-    const { provider, model } = get();
-    persistAiConfig(provider, model, id);
+    persistAiConfig(get());
   },
 
   addMessage: (sessionId, msg) => {
@@ -219,8 +281,7 @@ export const useAiStore = create<AiState>()((set, get) => ({
       return { sessions: newSessions, activeSessionId: id };
     });
     // Persist active session in config
-    const { provider, model } = get();
-    persistAiConfig(provider, model, id);
+    persistAiConfig(get());
     return id;
   },
 
@@ -234,14 +295,15 @@ export const useAiStore = create<AiState>()((set, get) => ({
     });
   },
 
-  sendMessage: async (sessionId, userPrompt, systemContext) => {
+  sendMessage: async (sessionId, userPrompt, systemContext, attachments) => {
     const { addMessage, provider, apiKey, model, baseUrl, handleRecursiveChat } = get();
     
     // Add user message
     addMessage(sessionId, { 
       role: 'user', 
       content: userPrompt, 
-      timestamp: Date.now() 
+      timestamp: Date.now(),
+      attachments 
     });
 
     // Safety: If the API key is corrupt (contains ESBuild error), clear it
@@ -317,11 +379,43 @@ export const useAiStore = create<AiState>()((set, get) => ({
 
     let body: any = {};
     if (provider === 'gemini') {
-      body.contents = providerMessages;
+      // Maps attachments for Gemini
+      body.contents = providerMessages.map((msg: any) => {
+        // Find matching original message for attachments
+        const ogMatch = session.messages.find(m => m.content === msg.parts[0]?.text);
+        if (ogMatch && ogMatch.attachments && ogMatch.attachments.length > 0) {
+          const imgParts = ogMatch.attachments.map(att => ({
+            inlineData: {
+              data: att.data.split(',')[1] || att.data, // remove data:image/png;base64, prefix if present
+              mimeType: att.type
+            }
+          }));
+          return {
+            ...msg,
+            parts: [...msg.parts, ...imgParts]
+          };
+        }
+        return msg;
+      });
       body.systemInstruction = { parts: [{ text: systemContext }] };
       body.tools = tools;
     } else {
-      body = { model, messages: providerMessages, tools: tools, stream: true };
+      // For OpenAI/Anthropic/others: Attachments fall back to base64 texts or are excluded for now depending on adapter
+      // Often you'd pass type: 'image_url' for OpenAI. We inject it manually here if attachments exist.
+      body = { model, messages: providerMessages.map((msg: any) => {
+        const ogMatch = session.messages.find(m => m.content === msg.content);
+        if (ogMatch && ogMatch.attachments && ogMatch.attachments.length > 0 && provider === 'openai') {
+           const imgContents = ogMatch.attachments.map(att => ({
+             type: 'image_url',
+             image_url: { url: att.data.includes('base64,') ? att.data : `data:${att.type};base64,${att.data}` }
+           }));
+           return {
+             ...msg,
+             content: [ { type: 'text', text: msg.content }, ...imgContents ]
+           };
+        }
+        return msg;
+      }), tools: tools, stream: true };
     }
 
     const response = await fetch(url, {

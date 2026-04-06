@@ -191,6 +191,11 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
   return (
     <div className="flex h-full w-full flex-col bg-white dark:bg-[#1e1e1e] overflow-hidden">
+      <style>{`
+        html.keyboard-open .bottom-nav {
+          display: none !important;
+        }
+      `}</style>
       {/* Top Bar with notch (safe-area) handling on mobile */}
       <div 
         className="flex h-[calc(3rem+env(safe-area-inset-top,0px))] md:h-9 items-center justify-between px-2 text-[13px] flex-shrink-0 z-20 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a]"
@@ -380,7 +385,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           {/* Nav bar in settings */}
           <div 
-            className="md:hidden flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
+            className="md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
           >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowSettings(false); setSidebarView('explorer'); }} />
@@ -409,7 +414,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           {/* Nav bar in extensions */}
           <div 
-            className="md:hidden flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
+            className="md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
           >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowExtensions(false); setSidebarView('explorer'); }} />
@@ -431,7 +436,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           {/* Nav bar in AI fullscreen */}
           <div 
-            className="md:hidden flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
+            className="md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
           >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setAiFullscreen(false); setSidebarView('explorer'); }} />

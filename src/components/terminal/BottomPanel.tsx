@@ -228,7 +228,7 @@ function ProblemsPanel() {
             onClick={sendToAgent}
             disabled={problems.length === 0}
             className="flex items-center space-x-1.5 px-2.5 py-1 rounded text-[10px] uppercase tracking-wider font-semibold bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            title="Send all problems to Sedna AI"
+            title="Send all problems to Larry AI"
           >
             <Send size={11} />
             <span>Send to Agent</span>

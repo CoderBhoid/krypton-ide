@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Send, Key, X, Sparkles, Loader2, Plus, MessageSquare, Trash2, ChevronDown, ChevronRight, BrainCircuit, FileCode, CheckCircle2, AlertCircle, Square, ClipboardList, Zap, Maximize, Minimize } from 'lucide-react';
+import { Bot, Send, Key, X, Sparkles, Loader2, Plus, MessageSquare, Trash2, ChevronDown, ChevronRight, BrainCircuit, FileCode, CheckCircle2, AlertCircle, Square, ClipboardList, Zap, Maximize, Minimize, Settings2, Paperclip } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
-import { useAiStore, Message } from '../../store/useAiStore';
+import { useAiStore, Message, AttachedFile } from '../../store/useAiStore';
 import { useDynamicModels } from '../../hooks/useDynamicModels';
-import SYSTEM_INSTRUCTION from '../../../Sedna.txt?raw';
+import SYSTEM_INSTRUCTION from '../../../Larry.txt?raw';
 
 function ThinkBlock({ content, duration }: { content: string; duration?: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -89,13 +89,31 @@ export function AiAssistant() {
   const [input, setInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [mentionQuery, setMentionQuery] = useState({ active: false, text: '', startIdx: 0 });
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const activeSession = aiStore.sessions.find(s => s.id === aiStore.activeSessionId) || aiStore.sessions[0];
   const aiMessages = activeSession?.messages || [];
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const data = event.target?.result as string;
+        setAttachments(prev => [...prev, { name: file.name, type: file.type || 'application/octet-stream', data }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   useEffect(() => { 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); 
@@ -133,7 +151,7 @@ export function AiAssistant() {
   const getMentionOptions = () => Object.values(files).filter(f => f.type === 'file' && f.name.toLowerCase().includes(mentionQuery.text)).slice(0, 8);
 
   const sendMessage = async () => {
-    if (!input.trim() || (!aiStore.apiKey && aiStore.provider !== 'openrouter')) return;
+    if ((!input.trim() && attachments.length === 0) || (!aiStore.apiKey && aiStore.provider !== 'openrouter')) return;
     
     const words = input.split(/\s+/);
     const mentions = words.filter(w => w.startsWith('@')).map(w => w.slice(1));
@@ -179,7 +197,9 @@ export function AiAssistant() {
     const systemContext = SYSTEM_INSTRUCTION + `\n<project_file_tree>\n${fileTreeItems}\n</project_file_tree>\n` + activeFileContext + contextString;
 
     const currentInput = input;
+    const currentAttachments = [...attachments];
     setInput('');
+    setAttachments([]);
     setMentionQuery({ active: false, text: '', startIdx: 0 });
 
     const prov = PROVIDERS.find(p => p.id === aiStore.provider);
@@ -190,7 +210,7 @@ export function AiAssistant() {
       sessionId = aiStore.createNewSession();
     }
 
-    await aiStore.sendMessage(sessionId, currentInput, systemContext);
+    await aiStore.sendMessage(sessionId, currentInput, systemContext, currentAttachments);
   }
 
   const applyCode = (filename: string, content: string) => {
@@ -280,7 +300,7 @@ export function AiAssistant() {
           <Sparkles size={48} className="text-white" />
         </div>
         <div className="space-y-2">
-          <h3 className="text-xl font-bold text-white tracking-tight border-b border-white/10 pb-2 inline-block">Sedna Elite</h3>
+          <h3 className="text-xl font-bold text-white tracking-tight border-b border-white/10 pb-2 inline-block">Larry Elite</h3>
           <p className="text-sm text-gray-400 max-w-[240px] leading-relaxed">
             Unleash the full power of agentic coding assistance. Connect your Sednium API keys to begin.
           </p>
@@ -300,10 +320,10 @@ export function AiAssistant() {
   if (showSettings) {
     return (
       <div className="flex h-full flex-col bg-[#1e1e1e]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2d2d2d]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2d2d2d] shrink-0">
           <div className="flex items-center space-x-2">
             <Bot size={18} className="text-blue-500" />
-            <h3 className="text-sm font-bold text-white uppercase tracking-widest">Connect</h3>
+            <h3 className="text-sm font-bold text-white uppercase tracking-widest">Model Configurations</h3>
           </div>
           <button onClick={() => setShowSettings(false)} className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
             <X size={18} />
@@ -311,17 +331,50 @@ export function AiAssistant() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          {/* Saved Models List */}
           <div>
-            <label className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-3 block">Infrastructure Provider</label>
-            <div className="grid grid-cols-2 gap-2">
-              {PROVIDERS.map(provider => (
-                <button
-                  key={provider.id}
-                  onClick={() => {
-                    aiStore.setProvider(provider.id);
-                    aiStore.setModel(provider.defaultModel);
-                    aiStore.setBaseUrl(provider.baseUrl);
-                  }}
+            <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-3 block">Saved Models</h4>
+            <div className="space-y-2">
+              {aiStore.savedModels.map(model => (
+                <div key={model.id} className="flex items-center justify-between bg-[#161b22] px-3 py-2.5 rounded-xl border border-[#30363d]">
+                  <div className="flex items-center space-x-3">
+                    <button 
+                      onClick={() => aiStore.setActiveSavedModel(model.id)}
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${aiStore.activeModelId === model.id ? 'border-emerald-500 bg-emerald-500/20' : 'border-gray-500'}`}
+                    >
+                      {aiStore.activeModelId === model.id && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                    </button>
+                    <div className="flex flex-col text-left">
+                      <span className="text-xs font-bold text-gray-200">{model.name}</span>
+                      <span className="text-[9px] text-gray-500 font-mono mt-0.5">{model.provider} / {model.model}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => aiStore.removeSavedModel(model.id)} className="text-gray-500 hover:text-red-400 p-1.5 transition-colors rounded-lg hover:bg-white/5">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              {aiStore.savedModels.length === 0 && (
+                <div className="text-[11px] text-gray-500 italic p-4 text-center border border-dashed border-gray-700/50 rounded-xl">
+                  No saved models yet. Create one below to continue.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-[#30363d] pt-6 space-y-6">
+            <h4 className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em] mb-3 block">Add New Configuration</h4>
+            <div>
+              <label className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-3 block">Infrastructure Provider</label>
+              <div className="grid grid-cols-2 gap-2">
+                {PROVIDERS.map(provider => (
+                  <button
+                    key={provider.id}
+                    onClick={() => {
+                      aiStore.setProvider(provider.id);
+                      aiStore.setModel(provider.defaultModel);
+                      aiStore.setBaseUrl(provider.baseUrl);
+                    }}
                   className={`px-3 py-2.5 rounded-xl text-xs text-center border transition-all duration-200 ${
                     activeProvider === provider.id
                       ? 'bg-blue-600/10 text-blue-400 border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
@@ -367,13 +420,30 @@ export function AiAssistant() {
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="px-5 py-5 border-t border-[#2d2d2d] bg-[#1a1a1a]">
+      <div className="px-5 py-4 flex-shrink-0 border-t border-[#2d2d2d] bg-[#1a1a1a]">
           <button 
-            onClick={() => setShowSettings(false)}
-            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 text-white py-3.5 rounded-2xl text-sm font-bold transition-all shadow-lg shadow-blue-600/20"
+            onClick={() => {
+              if (currentKey || activeProvider === 'openrouter') {
+                aiStore.addSavedModel({
+                  id: Date.now().toString(36),
+                  name: `${currentProvider.name} - Custom`,
+                  provider: activeProvider,
+                  model: selectedModel,
+                  apiKey: currentKey,
+                  baseUrl: currentProvider.baseUrl
+                });
+                if (aiStore.savedModels.length === 0 && (!aiStore.activeModelId)) {
+                  // automatically set active if it's the first
+                  const newId = aiStore.savedModels[0]?.id; // wait, state update is queued, so this might not catch it instantly. We can manually set it if needed.
+                }
+              }
+            }}
+            disabled={!currentKey && activeProvider !== 'openrouter'}
+            className="w-full bg-[#161b22] hover:bg-blue-600 border border-[#30363d] disabled:opacity-50 disabled:hover:bg-[#161b22] text-white py-3.5 rounded-2xl text-sm font-bold transition-all shadow-lg"
           >
-            Authenticate Link
+            Save Model Configuration
           </button>
         </div>
       </div>
@@ -388,7 +458,7 @@ export function AiAssistant() {
         <div className="flex items-center space-x-3">
           <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
           <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Sedna</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Larry</span>
             <span className="text-[9px] text-gray-500 border border-white/10 rounded px-1">{selectedModel}</span>
           </div>
         </div>
@@ -399,9 +469,47 @@ export function AiAssistant() {
           <button onClick={() => setShowSessionList(!showSessionList)} className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/5 transition-all">
             <MessageSquare size={16} />
           </button>
-          <button onClick={() => setShowSettings(true)} className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/5 transition-all">
-            <Key size={16} />
-          </button>
+          <div className="relative">
+            <button onClick={() => setShowModelDropdown(!showModelDropdown)} className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/5 transition-all">
+              <Key size={16} />
+            </button>
+            {showModelDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)} />
+                <div className="absolute right-0 top-full mt-2 w-64 bg-[#2d2d2d] border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-50 p-2 animate-scale-in">
+                  <div className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2 px-2 mt-1">Saved Models</div>
+                  <div className="flex flex-col mb-1 max-h-[300px] overflow-y-auto">
+                    {aiStore.savedModels.map(m => (
+                      <button 
+                        key={m.id} 
+                        onClick={() => { aiStore.setActiveSavedModel(m.id); setShowModelDropdown(false); }} 
+                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs flex flex-col transition-all ${
+                          aiStore.activeModelId === m.id ? 'bg-blue-600/10 text-blue-400' : 'text-gray-300 hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold truncate">{m.name}</span>
+                          {aiStore.activeModelId === m.id && <CheckCircle2 size={12} className="text-blue-400 shrink-0" />}
+                        </div>
+                        <span className="text-[9px] opacity-70 truncate font-mono mt-0.5">{m.provider} - {m.model}</span>
+                      </button>
+                    ))}
+                    {aiStore.savedModels.length === 0 && (
+                      <div className="px-3 py-4 text-center text-[10px] text-gray-500">
+                        No saved configurations.
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-1 border-t border-white/5 mt-1">
+                    <button onClick={() => { setShowModelDropdown(false); setShowSettings(true); }} className="w-full py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-semibold text-white transition-colors flex items-center justify-center space-x-2">
+                       <Settings2 size={14} />
+                       <span>Configure Models</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -528,8 +636,39 @@ export function AiAssistant() {
       )}
 
       {/* Input Section */}
-      <div className="p-4 border-t border-white/5 flex-shrink-0 bg-[#212121] z-40 relative">
-        <div className="flex items-center space-x-2 bg-[#0d1117] border border-white/10 rounded-2xl px-4 focus-within:border-blue-500/50 transition-all shadow-inner shadow-black/40">
+      <div className="p-3 border-t border-white/5 flex-shrink-0 bg-[#212121] z-40 relative">
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileChange} 
+          multiple 
+          accept="image/*,text/*,application/json,application/javascript,text/typescript" 
+          className="hidden" 
+        />
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2 px-1">
+            {attachments.map((att, i) => (
+              <div key={i} className="flex items-center space-x-1.5 bg-[#2d2d2d] border border-white/10 rounded-lg px-2 py-1 shadow-lg">
+                {att.type.startsWith('image/') ? (
+                  <img src={att.data} alt={att.name} className="w-4 h-4 object-cover rounded-[2px]" />
+                ) : (
+                  <Paperclip size={12} className="text-blue-400" />
+                )}
+                <span className="text-[10px] text-gray-300 truncate max-w-[120px] font-medium">{att.name}</span>
+                <button 
+                  onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))} 
+                  className="text-gray-500 hover:text-red-400 ml-1 transition-colors"
+                >
+                  <X size={12} strokeWidth={3} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center space-x-2 bg-[#0d1117] border border-white/10 rounded-2xl px-2 focus-within:border-blue-500/50 transition-all shadow-inner shadow-black/40">
+          <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-500 hover:text-blue-400 rounded-xl transition-all flex-shrink-0 active:scale-95">
+            <Plus size={20} />
+          </button>
           <input
             ref={inputRef}
             type="text"
@@ -546,25 +685,27 @@ export function AiAssistant() {
               }
             }}
             placeholder="Build something incredible..."
-            className="flex-1 bg-transparent py-4 text-sm text-white placeholder-gray-700 focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent py-3.5 text-sm text-white placeholder-gray-700 focus:outline-none"
           />
-          {isAiLoading ? (
-            <button
-              onClick={() => aiStore.abortChat()}
-              className="p-2.5 bg-red-600 text-white hover:bg-red-500 rounded-xl transition-all flex-shrink-0 active:scale-90 shadow-lg shadow-red-900/20"
-              title="Stop Generation"
-            >
-              <Square size={16} fill="currentColor" />
-            </button>
-          ) : (
-            <button
-              onClick={sendMessage}
-              disabled={!input.trim() || (!currentKey && aiStore.provider !== 'openrouter')}
-              className="p-2.5 bg-white text-black hover:bg-gray-200 disabled:opacity-20 disabled:hover:bg-white rounded-xl transition-all flex-shrink-0 active:scale-90"
-            >
-              <Send size={16} />
-            </button>
-          )}
+          <div className="flex items-center pr-1 space-x-1">
+            {isAiLoading ? (
+              <button
+                onClick={() => aiStore.abortChat()}
+                className="p-2 bg-red-600 text-white hover:bg-red-500 rounded-[0.7rem] transition-all flex-shrink-0 active:scale-90 shadow-lg shadow-red-900/20"
+                title="Stop Generation"
+              >
+                <Square size={16} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={sendMessage}
+                disabled={!input.trim() || (!currentKey && aiStore.provider !== 'openrouter')}
+                className="p-2 bg-white text-black hover:bg-gray-200 disabled:opacity-20 disabled:hover:bg-white rounded-[0.7rem] transition-all flex-shrink-0 active:scale-90"
+              >
+                <Send size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

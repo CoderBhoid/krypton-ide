@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, FolderOpen, Clock, FileCode2, ChevronRight, X, Code2, FileText, Braces, Github, Loader2, Smartphone, MonitorPlay, Server, TerminalSquare } from 'lucide-react';
+import { Plus, Trash2, Edit2, FolderOpen, Clock, FileCode2, ChevronRight, X, Code2, FileText, Braces, Github, Loader2, Smartphone, MonitorPlay, Server, TerminalSquare, Sparkles } from 'lucide-react';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import { type ProjectTemplate } from '../../lib/projectTemplates';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -168,7 +168,10 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
         <div className="mb-8 animate-float">
           <div className="relative">
             <div className="absolute inset-0 bg-blue-500/30 blur-2xl rounded-3xl animate-pulse-glow" />
-            <img src="/icon.png" alt="Krypton IDE" className="relative w-28 h-28 rounded-[2rem] shadow-2xl shadow-black/50 border border-white/10" />
+            <div 
+              className="relative w-28 h-28 rounded-[2rem] shadow-2xl shadow-black/50 border border-white/10 bg-cover bg-center" 
+              style={{ backgroundImage: "url('/icon.png')" }} 
+            />
           </div>
         </div>
 
@@ -327,11 +330,11 @@ export function ProjectsDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#050505] text-gray-900 dark:text-white flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col relative overflow-hidden">
       {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-blue-600/[0.08] blur-[120px] animate-ambient-drift" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-purple-600/[0.06] blur-[120px] animate-ambient-drift" style={{ animationDelay: '-10s' }} />
+        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-blue-600/[0.15] blur-[100px] animate-ambient-drift" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-purple-600/[0.12] blur-[100px] animate-ambient-drift" style={{ animationDelay: '-10s' }} />
       </div>
 
       {/* Welcome Screen */}
@@ -340,21 +343,22 @@ export function ProjectsDashboard() {
       )}
 
       {/* Header */}
-      <div className="relative z-10 border-x-0 border-t-0 border-b border-gray-200 dark:border-white/5 sticky top-0 bg-white dark:bg-[#111]">
-        <div className="relative px-6 pt-[var(--safe-area-top,48px)] pb-6">
-          <div className="flex flex-col items-center text-center space-y-3">
-            <div className="relative shadow-lg shadow-blue-500/20 rounded-[1.25rem]">
-              <img src="/icon.png" alt="Krypton" className="w-16 h-16 rounded-[1.25rem] border border-white/10" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-300 dark:to-indigo-300">Krypton IDE</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+      <div className="relative z-10 px-6 pt-[var(--safe-area-top,48px)] pb-4">
+        <div className="flex flex-col items-center text-center space-y-3">
+          <div className="relative shadow-lg shadow-blue-500/20 rounded-[1.25rem]">
+            <div 
+              className="w-16 h-16 rounded-[1.25rem] border border-white/10 bg-cover bg-center" 
+              style={{ backgroundImage: "url('/icon.png')" }} 
+            />
+          </div>
+          <div>
+              <h1 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-400 pb-1">Krypton IDE</h1>
+              <p className="text-sm text-gray-400 font-medium tracking-wide">
                 {googleUser ? `Good to see you, ${googleUser.name.split(' ')[0]}` : 'Your digital workspace'}
               </p>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Content */}
       <div className="flex-1 px-6 pb-8 relative z-10 mt-6">
@@ -362,7 +366,7 @@ export function ProjectsDashboard() {
         <div className="flex space-x-3 mb-8">
           <button 
             onClick={() => setShowNewProject(true)}
-            className="flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-[15px] shadow-xl active:scale-[0.98] transition-all duration-300 bg-blue-600 text-white hover:bg-blue-700"
+            className="flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-[15px] shadow-xl shadow-blue-900/20 active:scale-[0.98] transition-all duration-300 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500 border border-white/10"
           >
             <Plus size={20} strokeWidth={2.5} />
             <span>New Project</span>
@@ -370,7 +374,7 @@ export function ProjectsDashboard() {
           
           <button 
             onClick={() => setShowCloneRepo(true)}
-            className="flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-[15px] shadow-xl active:scale-[0.98] transition-all duration-300 bg-[#2ea043] text-white hover:bg-[#2c974b]"
+            className="flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-[15px] shadow-xl shadow-emerald-900/20 active:scale-[0.98] transition-all duration-300 bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500 border border-white/10"
           >
             <Github size={20} strokeWidth={2.5} />
             <span>Clone Repo</span>
@@ -380,7 +384,10 @@ export function ProjectsDashboard() {
         {/* Projects List */}
         {sortedProjects.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-20 opacity-60">
-            <img src="/icon.png" alt="" className="w-16 h-16 rounded-2xl opacity-30 dark:opacity-30 mb-5 invert dark:invert-0" />
+            <div 
+              className="w-16 h-16 rounded-[1.25rem] opacity-30 mb-5 bg-cover bg-center" 
+              style={{ backgroundImage: "url('/icon.png')" }} 
+            />
             <p className="text-lg font-medium text-gray-400 text-center">No projects yet</p>
             <p className="text-sm text-gray-500 mt-1 text-center">Tap "New Project" to get started</p>
           </div>
@@ -398,7 +405,7 @@ export function ProjectsDashboard() {
               return (
                 <div
                   key={project.id}
-                  className="group rounded-2xl p-4 transition-all duration-300 cursor-pointer animate-fade-slide-up relative overflow-hidden bg-white dark:bg-[#111] border border-gray-200 dark:border-[#222] hover:border-blue-500/50 active:scale-[0.99]"
+                  className="group rounded-2xl p-4 transition-all duration-300 cursor-pointer animate-fade-slide-up relative overflow-hidden bg-[#111] border border-white/10 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10 active:scale-[0.99]"
                   style={{ animationDelay: `${i * 40}ms`, animationFillMode: 'both' }}
                   onClick={() => {
                     if (editingId !== project.id) openProject(project.id);
@@ -425,9 +432,9 @@ export function ProjectsDashboard() {
                             className="bg-gray-50 dark:bg-black/40 border border-blue-400 rounded-lg px-3 py-1 text-gray-900 dark:text-white text-base font-semibold w-full focus:outline-none shadow-lg"
                           />
                         ) : (
-                          <h3 className="font-bold text-gray-900 dark:text-white truncate text-lg">{project.name}</h3>
+                          <h3 className="font-bold text-white truncate text-lg group-hover:text-blue-300 transition-colors">{project.name}</h3>
                         )}
-                        <div className="flex items-center space-x-3 text-xs text-gray-500 mt-1">
+                        <div className="flex items-center space-x-3 text-xs text-gray-400 mt-1">
                           <span className="flex items-center space-x-1">
                             <Clock size={11} />
                             <span>{formatDate(project.updatedAt)}</span>
@@ -447,17 +454,17 @@ export function ProjectsDashboard() {
                           setEditingId(project.id);
                           setEditName(project.name);
                         }}
-                        className="p-2 text-gray-500 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 active:bg-gray-200 dark:active:bg-white/20"
+                        className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 active:bg-white/20 transition-colors"
                       >
                         <Edit2 size={16} />
                       </button>
                       <button 
                         onClick={(e) => handleDelete(project.id, e)}
-                        className="p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 active:bg-red-100 dark:active:bg-red-500/20"
+                        className="p-2 text-gray-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 active:bg-red-500/20 transition-colors"
                       >
                         <Trash2 size={16} />
                       </button>
-                      <ChevronRight size={16} className="text-gray-600 ml-1" />
+                      <ChevronRight size={16} className="text-gray-500 group-hover:text-blue-400 ml-1 transition-colors" />
                     </div>
                   </div>
                 </div>
@@ -469,14 +476,17 @@ export function ProjectsDashboard() {
 
       {showNewProject && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/80 animate-fade-in" onClick={() => setShowNewProject(false)} />
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowNewProject(false)} />
           
-          <div className="relative w-full max-w-4xl sm:border rounded-t-[2rem] sm:rounded-[2rem] p-6 max-h-[90vh] overflow-y-auto animate-slide-up shadow-2xl bg-white dark:bg-[#111] border-gray-200 dark:border-[#222]">
+          <div className="relative w-full max-w-4xl sm:border rounded-t-[2rem] sm:rounded-[2rem] p-6 max-h-[90vh] overflow-y-auto animate-slide-up shadow-2xl bg-[#0a0a0a] border-white/10">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white/90">New Project</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2">
+                <Sparkles className="text-blue-400" size={24} />
+                <span>New Project</span>
+              </h2>
               <button 
                 onClick={() => setShowNewProject(false)} 
-                className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors active:bg-gray-200 dark:active:bg-white/20"
+                className="p-2 text-gray-400 hover:bg-white/10 rounded-full transition-colors active:bg-white/20"
               >
                 <X size={22} className="text-gray-500 dark:text-gray-400" />
               </button>
@@ -484,24 +494,24 @@ export function ProjectsDashboard() {
 
             {/* Project Name */}
             <div className="mb-6">
-              <label className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2.5 block uppercase tracking-wider">Project Name</label>
+              <label className="text-sm font-semibold text-gray-400 mb-2.5 block uppercase tracking-wider">Project Name</label>
               <input
                 autoFocus
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="My Awesome Project"
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                className="w-full bg-gray-50 dark:bg-[#050505]/50 border border-gray-200 dark:border-white/10 rounded-2xl px-5 py-4 text-gray-900 dark:text-white text-lg placeholder-gray-400 dark:placeholder-gray-600 focus:border-blue-500/70 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all font-semibold"
+                className="w-full bg-[#111] border border-white/10 rounded-2xl px-5 py-4 text-white text-lg placeholder-gray-600 focus:border-blue-500/70 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all font-semibold shadow-inner shadow-black/50"
               />
             </div>
 
             {/* Template Selection */}
             <div className="mb-8">
-              <label className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 block uppercase tracking-wider">Choose a Template</label>
+              <label className="text-sm font-semibold text-gray-400 mb-3 block uppercase tracking-wider">Choose a Template</label>
               <div className="space-y-6">
                 {templateCategories.map((category) => (
                   <div key={category.id}>
-                    <h3 className="flex items-center space-x-2 text-[13px] font-bold text-gray-700 dark:text-gray-300 mb-3 ml-1">
+                    <h3 className="flex items-center space-x-2 text-[13px] font-bold text-gray-300 mb-3 ml-1">
                       {category.icon}
                       <span>{category.name}</span>
                     </h3>
@@ -512,8 +522,8 @@ export function ProjectsDashboard() {
                           onClick={() => setSelectedTemplate(t.id as ProjectTemplate)}
                           className={`flex flex-col items-start p-3 sm:p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group ${
                             selectedTemplate === t.id
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 shadow-lg shadow-blue-500/10 scale-[1.02]'
-                              : 'border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20'
+                              ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10 scale-[1.02]'
+                              : 'border-white/5 bg-[#111] hover:bg-white/5 hover:border-white/20'
                           }`}
                         >
                           {/* Glare effect */}
@@ -523,11 +533,11 @@ export function ProjectsDashboard() {
                             {React.cloneElement(t.icon as React.ReactElement, { size: 20 })}
                           </div>
                           <div className="text-left w-full">
-                            <div className="font-bold text-gray-900 dark:text-white/90 mb-1 leading-tight text-sm sm:text-base">{t.name}</div>
-                            <div className="text-[10px] sm:text-[11px] text-gray-500 leading-snug line-clamp-2">{t.desc}</div>
+                            <div className="font-bold text-white mb-1 leading-tight text-sm sm:text-base">{t.name}</div>
+                            <div className="text-[10px] sm:text-[11px] text-gray-400 leading-snug line-clamp-2">{t.desc}</div>
                           </div>
                           {/* Active Selector Ring */}
-                          <div className={`absolute top-4 right-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center transition-colors ${selectedTemplate === t.id ? 'border-blue-500 bg-blue-500' : 'border-gray-200 dark:border-white/20'}`}>
+                          <div className={`absolute top-4 right-4 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center transition-colors ${selectedTemplate === t.id ? 'border-blue-500 bg-blue-500' : 'border-white/20 bg-[#222]'}`}>
                             {selectedTemplate === t.id && (
                               <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
                                 <path d="M2 6l3 3 5-5" strokeLinecap="round" strokeLinejoin="round" />
@@ -553,14 +563,14 @@ export function ProjectsDashboard() {
                       checked={linkGitHub}
                       onChange={(e) => setLinkGitHub(e.target.checked)}
                     />
-                    <div className="w-6 h-6 border-2 border-gray-300 dark:border-gray-600 rounded-md peer-checked:bg-blue-500 peer-checked:border-blue-500 transition-colors" />
+                    <div className="w-6 h-6 border-2 border-gray-600 rounded-md peer-checked:bg-blue-500 peer-checked:border-blue-500 transition-colors bg-[#111]" />
                     <svg viewBox="0 0 14 10" className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1 5l4 4 8-8" />
                     </svg>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Github size={18} className="text-gray-700 dark:text-gray-300" />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                    <Github size={18} className="text-gray-300 group-hover:text-white transition-colors" />
+                    <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
                       Create Private GitHub Repository
                     </span>
                   </div>
@@ -571,7 +581,7 @@ export function ProjectsDashboard() {
             <button 
               onClick={handleCreate}
               disabled={isCreating}
-              className="w-full py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-[0.98] transition-all duration-300 bg-blue-600 text-white hover:bg-blue-700 mt-4 flex items-center justify-center space-x-2 disabled:opacity-70"
+              className="w-full py-4 rounded-2xl font-bold text-lg shadow-xl shadow-blue-900/20 active:scale-[0.98] transition-all duration-300 bg-gradient-to-r from-blue-600 to-indigo-600 border border-white/10 text-white hover:from-blue-500 hover:to-indigo-500 mt-4 flex items-center justify-center space-x-2 disabled:opacity-70"
             >
               {isCreating ? (
                 <>
@@ -589,19 +599,19 @@ export function ProjectsDashboard() {
       {/* Clone Repository Modal */}
       {showCloneRepo && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/80 animate-fade-in" onClick={() => setShowCloneRepo(false)} />
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowCloneRepo(false)} />
           
-          <div className="relative w-full max-w-2xl sm:border rounded-t-[2rem] sm:rounded-[2rem] p-6 max-h-[85vh] flex flex-col animate-slide-up shadow-2xl bg-white dark:bg-[#111] border-gray-200 dark:border-[#222]">
+          <div className="relative w-full max-w-2xl sm:border rounded-t-[2rem] sm:rounded-[2rem] p-6 max-h-[85vh] flex flex-col animate-slide-up shadow-2xl bg-[#0a0a0a] border-white/10">
             <div className="flex items-center justify-between mb-4 flex-shrink-0">
-              <h2 className="text-xl font-bold tracking-tight flex items-center space-x-2 text-gray-900 dark:text-white/90">
-                <Github size={24} />
+              <h2 className="text-xl font-bold tracking-tight flex items-center space-x-2 text-white">
+                <Github size={24} className="text-emerald-400" />
                 <span>Clone from GitHub</span>
               </h2>
               <button 
                 onClick={() => setShowCloneRepo(false)} 
-                className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors active:bg-gray-200 dark:active:bg-white/20"
+                className="p-2 text-gray-400 hover:bg-white/10 rounded-full transition-colors active:bg-white/20"
               >
-                <X size={22} className="text-gray-500 dark:text-gray-400" />
+                <X size={22} className="text-gray-400" />
               </button>
             </div>
 
@@ -626,11 +636,11 @@ export function ProjectsDashboard() {
                     value={cloneSearch}
                     onChange={(e) => setCloneSearch(e.target.value)}
                     placeholder="Search your repositories..."
-                    className="w-full bg-gray-50 dark:bg-[#050505]/50 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white text-base placeholder-gray-400 dark:placeholder-gray-600 focus:border-blue-500/70 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-base placeholder-gray-600 focus:border-emerald-500/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-inner shadow-black/50"
                   />
                 </div>
                 
-                <div className="flex-1 overflow-y-auto min-h-[300px] border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-[#1a1a1a]">
+                <div className="flex-1 overflow-y-auto min-h-[300px] border border-white/10 rounded-xl bg-[#111]">
                   {loadingRepos ? (
                     <div className="flex items-center justify-center h-full">
                       <Loader2 size={24} className="animate-spin text-gray-500" />
@@ -640,13 +650,13 @@ export function ProjectsDashboard() {
                       No matching repositories found.
                     </div>
                   ) : (
-                    <div className="divide-y divide-gray-200 dark:divide-white/5">
+                    <div className="divide-y divide-white/5">
                       {repos
                         .filter(r => r.name.toLowerCase().includes(cloneSearch.toLowerCase()) || r.full_name.toLowerCase().includes(cloneSearch.toLowerCase()))
                         .map(repo => (
-                        <div key={repo.full_name} className="flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
+                        <div key={repo.full_name} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors group">
                           <div className="flex-1 min-w-0 mr-4">
-                            <h4 className="font-semibold text-gray-900 dark:text-white text-base truncate">{repo.name}</h4>
+                            <h4 className="font-semibold text-white text-base truncate group-hover:text-emerald-400 transition-colors">{repo.name}</h4>
                             <p className="text-gray-500 text-xs truncate mt-0.5">{repo.full_name}</p>
                           </div>
                           <button

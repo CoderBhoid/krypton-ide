@@ -8,6 +8,15 @@ const BASE_PATH_KEY = 'krypton-base-path'; // bootstrap key stored in localStora
 const DEFAULT_FOLDER = 'KryptonIDE';
 
 // ─── Types ───────────────────────────────────────────────────
+export interface SavedModel {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  apiKey: string;
+  baseUrl?: string;
+}
+
 export interface KryptonConfig {
   welcomed: boolean;
   haptics: boolean;
@@ -18,6 +27,8 @@ export interface KryptonConfig {
     provider: string;
     model: string;
     activeSessionId: string | null;
+    savedModels?: SavedModel[];
+    activeModelId?: string;
   };
 }
 
@@ -43,6 +54,8 @@ const DEFAULT_CONFIG: KryptonConfig = {
     provider: 'openai',
     model: 'gpt-4o',
     activeSessionId: null,
+    savedModels: [],
+    activeModelId: undefined,
   },
 };
 
