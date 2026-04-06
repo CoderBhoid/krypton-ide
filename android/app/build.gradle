@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.sednium.krypton"
+    namespace = "com.sednium.kryptonide"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.sednium.krypton"
