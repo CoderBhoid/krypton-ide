@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.sednium.krypton',
+  appId: 'com.sednium.kryptonide',
   appName: 'Krypton IDE',
   webDir: 'dist',
   
