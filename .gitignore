@@ -18,9 +18,10 @@ android/build/
 android/local.properties
 
 # Krypton sensitive files (NEVER commit)
-KEYSTORE_BASE64.txt
+*.keystore.base64
+encoded.txt
 KEYSTORE_PASSWORD.txt
-KRYPTONKS.txt
 KEYSTORE_INFO.txt
-KEYSTORE_BASE64.txt
-metadata.json
+KRYPTONKS.txt
+*.txt.encoded
+*.keystore.txt
