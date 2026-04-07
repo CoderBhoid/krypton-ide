@@ -47,7 +47,7 @@ jobs:
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
           # Fallback if secret not set (for local forks)
           if [ ! -s android/app/release.keystore ]; then
-            keytool -genkey -v -keystore android/app/release.keystore -storepass "\${{ secrets.KEYSTORE_PASSWORD || '[REDACTED]' }}" -alias krypton -keypass "\${{ secrets.KEYSTORE_PASSWORD || '[REDACTED]' }}" -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+            keytool -genkey -v -keystore android/app/release.keystore -storepass "${{ secrets.KEYSTORE_PASSWORD || '[REDACTED]' }}" -alias krypton -keypass "${{ secrets.KEYSTORE_PASSWORD || '[REDACTED]' }}" -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
           fi
 
 
