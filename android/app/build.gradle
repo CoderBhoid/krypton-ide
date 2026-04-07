@@ -17,8 +17,6 @@ android {
         }
     }
     signingConfigs {
-        // Use the same debug keystore for both debug and release
-        // so APK updates never conflict with existing installs
         debug {
             storeFile file("${System.properties['user.home']}/.android/debug.keystore")
             storePassword 'android'
@@ -26,12 +24,22 @@ android {
             keyPassword 'android'
         }
         release {
-            // For production: replace with your release keystore
-            // For dev side-loading: reuse debug keystore to avoid signature conflicts
-            storeFile file("${System.properties['user.home']}/.android/debug.keystore")
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+            // Environment-aware signing for GitHub Actions & Local builds
+            def ksFile = file("release.keystore")
+            def ksPass = System.getenv("KEYSTORE_PASSWORD") ?: "android"
+            
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword ksPass
+                keyAlias 'krypton'
+                keyPassword ksPass
+            } else {
+                // Fallback to debug for local development if no release key exists
+                storeFile file("${System.properties['user.home']}/.android/debug.keystore")
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
         }
     }
     buildTypes {
