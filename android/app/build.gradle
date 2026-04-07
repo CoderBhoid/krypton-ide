@@ -26,7 +26,7 @@ android {
         release {
             // Environment-aware signing for GitHub Actions & Local builds
             def ksFile = file("release.keystore")
-            def ksPass = System.getenv("KEYSTORE_PASSWORD") ?: "android"
+            def ksPass = System.getenv("KEYSTORE_PASSWORD") ?: "[REDACTED]"
             
             if (ksFile.exists()) {
                 storeFile ksFile
