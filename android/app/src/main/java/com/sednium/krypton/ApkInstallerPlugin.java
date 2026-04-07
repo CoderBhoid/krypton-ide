@@ -1,4 +1,4 @@
-package com.sednium.krypton;
+package com.sednium.kryptonide;
 
 import android.content.Intent;
 import android.net.Uri;
