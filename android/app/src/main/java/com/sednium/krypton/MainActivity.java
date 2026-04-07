@@ -1,4 +1,4 @@
-package com.sednium.krypton;
+package com.sednium.kryptonide;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
