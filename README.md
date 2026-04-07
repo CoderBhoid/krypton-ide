@@ -42,8 +42,10 @@ Krypton IDE brings the power of a desktop code editor to your Android device. Bu
 ### 🤖 Luminous AI Agent
 - **6 AI providers** — Gemini, OpenAI, Claude, Groq, Mistral, OpenRouter
 - **Multi-session chat** — Create unlimited conversations, auto-saved
-- **Streaming responses** — Real-time token-by-token output
+- **Streaming responses** — Real-time token-by-token output with **reasoning animations**
 - **@file context tagging** — Tag any file for precise code assistance
+- **@problems smart tagging** — Auto-inject editor errors & preview console logs into context
+- **Modified File Badges** — Visual indicators for any file the AI edits
 - **1-click Apply** — Apply AI-suggested code edits instantly
 
 ### 💻 Integrated Terminal
@@ -56,7 +58,8 @@ Krypton IDE brings the power of a desktop code editor to your Android device. Bu
 - **HTML/CSS/JS** instant preview
 - **React/JSX** with Babel transpilation
 - **SVG rendering** support
-- **Code execution** for JavaScript, TypeScript, Python, and more
+- **Hybrid Code Execution** — 30+ total languages supported (Python, Rust, C#, Zig, etc.)
+- **Local-first** — Web languages run in-browser; heavy binaries via optimized cloud proxy
 
 ### 🎨 Extensions & Themes
 - **Theme extensions** — Dracula, Nord, Monokai, One Dark, Solarized, and more
@@ -66,6 +69,7 @@ Krypton IDE brings the power of a desktop code editor to your Android device. Bu
 
 ### 📱 Native Android Experience
 - **Capacitor-powered** native Android app
+- **Dynamic Theme Sync** — Status & Navigation bars match your IDE theme in real-time
 - **Haptic feedback** on interactions
 - **Touch-optimized** toolbar with quick-access actions
 - **Immersive mode** — Full-screen editing with status bar integration
