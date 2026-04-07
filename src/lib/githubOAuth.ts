@@ -2,6 +2,8 @@
 // RFC 8628 — no client_secret needed, perfect for mobile apps
 // User gets a code, enters it at github.com/login/device, and we poll for the token.
 
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
+
 const GITHUB_CLIENT_ID = 'Ov23liyV98dAUjn7z7XO';
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
@@ -33,24 +35,40 @@ export type PollStatus =
 
 // ─── Step 1: Request Device Code ─────────────────────────────
 export async function requestDeviceCode(): Promise<DeviceCodeResponse> {
-  const res = await fetch(DEVICE_CODE_URL, {
-    method: 'POST',
+  const options = {
+    url: DEVICE_CODE_URL,
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
+    data: {
       client_id: GITHUB_CLIENT_ID,
       scope: SCOPES,
-    }),
-  });
+    },
+  };
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to request device code: ${res.status} — ${text}`);
+  let data;
+  
+  if (Capacitor.isNativePlatform()) {
+    const res = await CapacitorHttp.post(options);
+    if (res.status !== 200) {
+      throw new Error(`Failed to request device code: ${res.status} — ${JSON.stringify(res.data)}`);
+    }
+    data = res.data;
+  } else {
+    const res = await fetch(DEVICE_CODE_URL, {
+      method: 'POST',
+      headers: options.headers,
+      body: JSON.stringify(options.data),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to request device code: ${res.status} — ${text}`);
+    }
+
+    data = await res.json();
   }
-
-  const data = await res.json();
   
   if (data.error) {
     throw new Error(`GitHub error: ${data.error_description || data.error}`);
@@ -68,24 +86,40 @@ export async function requestDeviceCode(): Promise<DeviceCodeResponse> {
 // ─── Step 2: Poll for Access Token ───────────────────────────
 export async function pollForToken(deviceCode: string): Promise<PollStatus> {
   try {
-    const res = await fetch(ACCESS_TOKEN_URL, {
-      method: 'POST',
+    const options = {
+      url: ACCESS_TOKEN_URL,
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
+      data: {
         client_id: GITHUB_CLIENT_ID,
         device_code: deviceCode,
         grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-      }),
-    });
+      },
+    };
 
-    if (!res.ok) {
-      return { status: 'error', message: `HTTP ${res.status}` };
+    let data;
+
+    if (Capacitor.isNativePlatform()) {
+      const res = await CapacitorHttp.post(options);
+      if (res.status !== 200) {
+        return { status: 'error', message: `HTTP ${res.status}` };
+      }
+      data = res.data;
+    } else {
+      const res = await fetch(ACCESS_TOKEN_URL, {
+        method: 'POST',
+        headers: options.headers,
+        body: JSON.stringify(options.data),
+      });
+
+      if (!res.ok) {
+        return { status: 'error', message: `HTTP ${res.status}` };
+      }
+
+      data = await res.json();
     }
-
-    const data = await res.json();
 
     // Check for error states
     if (data.error) {

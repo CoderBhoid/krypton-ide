@@ -11,9 +11,12 @@ export interface OutputEntry {
 interface OutputState {
   entries: OutputEntry[];
   maxEntries: number;
+  consoleLogs: { type: string; args: string; ts: number }[];
 
   addEntry: (text: string, type: OutputEntry['type'], source: OutputEntry['source']) => void;
+  addConsoleLog: (log: { type: string; args: string; ts: number }) => void;
   clear: () => void;
+  clearConsoleLogs: () => void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -21,6 +24,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 export const useOutputStore = create<OutputState>()((set) => ({
   entries: [],
   maxEntries: 500,
+  consoleLogs: [],
 
   addEntry: (text, type, source) => {
     const entry: OutputEntry = {
@@ -35,5 +39,12 @@ export const useOutputStore = create<OutputState>()((set) => ({
     }));
   },
 
+  addConsoleLog: (log) => {
+    set((state) => ({
+      consoleLogs: [...state.consoleLogs.slice(-(state.maxEntries - 1)), log],
+    }));
+  },
+
   clear: () => set({ entries: [] }),
+  clearConsoleLogs: () => set({ consoleLogs: [] }),
 }));

@@ -519,6 +519,7 @@ export async function readProjectFiles(projectId: string): Promise<Record<string
   if (treeRaw) {
     try {
       const tree = JSON.parse(treeRaw) as Record<string, FileNode>;
+      const missingNodeIds = new Set<string>();
 
       // Re-read actual file contents from disk (source of truth)
       for (const [nodeId, node] of Object.entries(tree)) {
@@ -540,8 +541,19 @@ export async function readProjectFiles(projectId: string): Promise<Record<string
         const content = await readTextFile(`${projectDir}/${relativePath}`);
         if (content !== null) {
           tree[nodeId] = { ...node, content };
+        } else {
+          missingNodeIds.add(nodeId);
         }
       }
+
+      // Prune missing nodes
+      missingNodeIds.forEach(id => {
+        const node = tree[id];
+        if (node.parentId && tree[node.parentId]) {
+          tree[node.parentId].children = tree[node.parentId].children?.filter(c => c !== id) || [];
+        }
+        delete tree[id];
+      });
 
       return tree;
     } catch { /* fall through to scan */ }
@@ -559,7 +571,7 @@ async function scanDirectoryToTree(dirPath: string): Promise<Record<string, File
 
   const root: FileNode = {
     id: 'root',
-    name: 'Project',
+    name: 'Project', // Cannot set real name here without passing it correctly, we fix this in loadFromDisk
     type: 'folder',
     parentId: null,
     children: [],
@@ -571,8 +583,8 @@ async function scanDirectoryToTree(dirPath: string): Promise<Record<string, File
   async function scanDir(path: string, parentId: string) {
     const entries = await listDir(path);
     for (const entry of entries) {
-      // Skip internal files
-      if (entry.name.startsWith('._krypton') || entry.name === 'project.meta.json') continue;
+      // Skip internal files and subfolders
+      if (entry.name.startsWith('._krypton') || entry.name === 'project.meta.json' || entry.name === 'ai-sessions') continue;
 
       const id = generateId();
 

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bot, Send, Key, X, Sparkles, Loader2, Plus, MessageSquare, Trash2, ChevronDown, ChevronRight, BrainCircuit, FileCode, CheckCircle2, AlertCircle, Square, ClipboardList, Zap, Maximize, Minimize, Settings2, Paperclip } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useAiStore, Message, AttachedFile } from '../../store/useAiStore';
+import { useProblemsStore } from '../../store/useProblemsStore';
+import { useOutputStore } from '../../store/useOutputStore';
 import { useDynamicModels } from '../../hooks/useDynamicModels';
 import SYSTEM_INSTRUCTION from '../../../Larry.txt?raw';
 
@@ -19,15 +21,26 @@ function ThinkBlock({ content, duration }: { content: string; duration?: number 
   );
 }
 
-function PlanBlock({ content }: { content: string }) {
+function PlanBlock({ content, onComment }: { content: string, onComment?: () => void }) {
   const [expanded, setExpanded] = useState(true);
   return (
     <div className="my-2 border border-amber-800/40 rounded-lg overflow-hidden w-full max-w-full">
-      <button onClick={() => setExpanded(!expanded)} className="w-full bg-amber-950/30 hover:bg-amber-950/50 px-3 py-2 text-[11px] font-mono text-amber-300 flex items-center transition-colors">
-        {expanded ? <ChevronDown size={14} className="mr-2" /> : <ChevronRight size={14} className="mr-2" />}
-        <ClipboardList size={14} className="mr-2 text-amber-400" />
-        Implementation Plan
-      </button>
+      <div className="flex bg-amber-950/30 transition-colors">
+        <button onClick={() => setExpanded(!expanded)} className="flex-1 hover:bg-amber-950/50 px-3 py-2 text-[11px] font-mono text-amber-300 flex items-center text-left">
+          {expanded ? <ChevronDown size={14} className="mr-2 shrink-0" /> : <ChevronRight size={14} className="mr-2 shrink-0" />}
+          <ClipboardList size={14} className="mr-2 shrink-0 text-amber-400" />
+          <span className="truncate">Implementation Plan</span>
+        </button>
+        {onComment && (
+          <button 
+            onClick={onComment}
+            className="px-3 py-2 hover:bg-amber-900/50 text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center transition-colors border-l border-amber-800/20"
+            title="Add a comment to this plan"
+          >
+            <MessageSquare size={12} className="mr-1.5" /> Comment
+          </button>
+        )}
+      </div>
       {expanded && <pre className="p-3 text-[11px] overflow-x-auto bg-[#0d1117] text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">{content.trim()}</pre>}
     </div>
   );
@@ -148,7 +161,14 @@ export function AiAssistant() {
     inputRef.current?.focus();
   };
 
-  const getMentionOptions = () => Object.values(files).filter(f => f.type === 'file' && f.name.toLowerCase().includes(mentionQuery.text)).slice(0, 8);
+  const getMentionOptions = () => {
+    const fileMatches = Object.values(files).filter(f => f.type === 'file' && f.name.toLowerCase().includes(mentionQuery.text)).slice(0, 8);
+    const options: any[] = [...fileMatches];
+    if ('problems'.includes(mentionQuery.text.toLowerCase())) {
+      options.unshift({ name: 'problems', isSpecial: true });
+    }
+    return options.slice(0, 8);
+  };
 
   const sendMessage = async () => {
     if ((!input.trim() && attachments.length === 0) || (!aiStore.apiKey && aiStore.provider !== 'openrouter')) return;
@@ -156,10 +176,27 @@ export function AiAssistant() {
     const words = input.split(/\s+/);
     const mentions = words.filter(w => w.startsWith('@')).map(w => w.slice(1));
     let contextString = '';
-    if (mentions.length > 0) {
-      const taggedFiles = Object.values(files).filter(f => f.type === 'file' && mentions.includes(f.name));
+    
+    if (mentions.includes('problems')) {
+      const problems = useProblemsStore.getState().problems;
+      const logs = useOutputStore.getState().consoleLogs;
+      
+      const pText = problems.length > 0 
+        ? 'Editor Problems:\n' + problems.map((p: any) => `[${p.severity.toUpperCase()}] ${p.fileName}:${p.startLine}:${p.startCol} — ${p.message}`).join('\n') 
+        : 'No editor problems detected.';
+        
+      const cText = logs && logs.length > 0 
+        ? 'Preview Web Console Logs:\n' + logs.map((l: any) => `[${l.type.toUpperCase()}] ${l.args}`).join('\n') 
+        : 'No preview console logs.';
+        
+      contextString += `\n<problems_context>\n${pText}\n\n${cText}\n</problems_context>\n`;
+    }
+
+    const fileMentions = mentions.filter(m => m !== 'problems');
+    if (fileMentions.length > 0) {
+      const taggedFiles = Object.values(files).filter(f => f.type === 'file' && fileMentions.includes(f.name));
       if (taggedFiles.length > 0) {
-        contextString = '\n\n<tagged_files>\n' + taggedFiles.map(f => {
+        contextString += '\n\n<tagged_files>\n' + taggedFiles.map(f => {
           // Build full path for the file
           const buildPath = (nodeId: string): string => {
             const node = files[nodeId];
@@ -170,7 +207,7 @@ export function AiAssistant() {
           const fileId = Object.entries(files).find(([_, n]) => n === f)?.[0] || '';
           const fullPath = fileId ? buildPath(fileId) : f.name;
           return `<file path="${fullPath}">\n${f.content || ''}\n</file>`;
-        }).join('\n') + '\n</tagged_files>\n';
+        }).join('\n\n') + '\n</tagged_files>';
       }
     }
 
@@ -214,9 +251,53 @@ export function AiAssistant() {
   }
 
   const applyCode = (filename: string, content: string) => {
-    const fileEntry = Object.entries(files).find(([_, f]) => f.name === filename);
-    if (fileEntry) { updateFileContent(fileEntry[0], content); saveFile(fileEntry[0]); }
-    else { const id = createFile(filename, 'root', 'file', content); saveFile(id); }
+    // filename might be a full path like "src/components/App.tsx"
+    // We need to resolve it against the exact path in the file tree
+    const buildPath = (nodeId: string): string => {
+      const node = files[nodeId];
+      if (!node || !node.parentId || nodeId === 'root') return '';
+      const parentPath = buildPath(node.parentId);
+      return parentPath ? `${parentPath}/${node.name}` : node.name;
+    };
+
+    const fileEntry = Object.entries(files).find(([id, f]) => {
+      if (f.type !== 'file') return false;
+      return f.name === filename || buildPath(id) === filename;
+    });
+
+    if (fileEntry) { 
+      updateFileContent(fileEntry[0], content); 
+      saveFile(fileEntry[0]); 
+    } else { 
+      const id = createFile(filename.split('/').pop() || filename, 'root', 'file', content); 
+      saveFile(id); 
+    }
+  };
+
+  const getModifiedFiles = (msg: Message) => {
+    const filesModified = new Set<string>();
+    
+    // 1. Extact from <edit> tags
+    const regex = /<edit(?: file="([^"]*)")?>/g;
+    let match;
+    while ((match = regex.exec(msg.content)) !== null) {
+      if (match[1]) filesModified.add(match[1].split('/').pop() || match[1]);
+    }
+
+    // 2. Extract from tool calls (if model adapters pass them down)
+    if (msg.tool_calls) {
+      msg.tool_calls.forEach(call => {
+        const name = call.function?.name;
+        if (name && ['edit_lines', 'insert_lines', 'patch_file', 'write_new_file'].includes(name)) {
+          try {
+            const args = JSON.parse(call.function.arguments);
+            if (args.path) filesModified.add(args.path.split('/').pop() || args.path);
+          } catch { } // ignore incomplete JSON streaming
+        }
+      });
+    }
+    
+    return Array.from(filesModified);
   };
 
   const renderMessageContent = (content: string, msg: Message) => {
@@ -231,8 +312,9 @@ export function AiAssistant() {
       return <span key="fallback" className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed break-words block">{rendered}</span>;
     }
 
-    // Split by tags (ans, edit, plan, status) while preserving them
-    const rawParts = content.split(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|<ans>[\s\S]*?(?:<\/ans>|$)|<edit file="[^"]+">[\s\S]*?(?:<\/edit>|$)|<plan>[\s\S]*?(?:<\/plan>|$)|<status>[\s\S]*?(?:<\/status>|$))/g);
+    // Split by tags (ans, edit, plan, status) while preserving them.
+    // Removed naive quote matching which swallowed tags after apostrophes.
+    const rawParts = content.split(/(<ans>[\s\S]*?(?:<\/ans>|$)|<edit(?: file="[^"]*")?>[\s\S]*?(?:<\/edit>|$)|<plan>[\s\S]*?(?:<\/plan>|$)|<status>[\s\S]*?(?:<\/status>|$))/g);
     
     // Merge adjacent reasoning parts to keep Thought blocks contiguous
     const parts: string[] = [];
@@ -260,7 +342,10 @@ export function AiAssistant() {
 
       if (part.startsWith('<plan>')) {
         const planContent = part.replace(/^<plan>/, '').replace(/<\/plan>$/, '');
-        return <PlanBlock key={i} content={planContent} />;
+        return <PlanBlock key={i} content={planContent} onComment={() => {
+          setInput(prev => prev + (prev.trim() ? '\n' : '') + 'Regarding your implementation plan: \n\n');
+          setTimeout(() => inputRef.current?.focus(), 10);
+        }} />;
       }
 
       if (part.startsWith('<status>')) {
@@ -268,10 +353,10 @@ export function AiAssistant() {
         return <StatusBlock key={i} content={statusContent} />;
       }
 
-      if (part.startsWith('<edit file="')) {
-        const match = part.match(/<edit file="([^"]+)">([\s\S]*?)(?:<\/edit>|$)/);
+      if (part.startsWith('<edit')) {
+        const match = part.match(/<edit(?: file="([^"]*)")?>([\s\S]*?)(?:<\/edit>|$)/);
         if (match) {
-          const filename = match[1], code = match[2].trim();
+          const filename = match[1] || 'untitled', code = match[2].trim();
           const isClosed = part.includes('</edit>');
           return (
             <div key={i} className="my-2 border border-[#30363d] rounded-lg overflow-hidden w-full max-w-full">
@@ -585,7 +670,28 @@ export function AiAssistant() {
                   ? 'bg-transparent w-full px-0 py-0'
                   : 'bg-[#2d2d2d] text-gray-200 border border-white/5 rounded-bl-none w-full shadow-xl'
             }`}>
-              {msg.role !== 'user' ? renderMessageContent(msg.content, msg) : (
+              {msg.role !== 'user' ? (
+                <>
+                  {renderMessageContent(msg.content, msg)}
+                  {msg.role === 'assistant' && (() => {
+                    const modified = getModifiedFiles(msg);
+                    if (modified.length === 0) return null;
+                    return (
+                      <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-2 animate-fade-in">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest shrink-0">
+                          Modified ({modified.length})
+                        </span>
+                        {modified.map((file, idx) => (
+                          <div key={idx} className="flex items-center space-x-1.5 px-2 py-1 bg-[#161b22] border border-[#30363d] rounded-md shadow-sm">
+                            <FileCode size={12} className="text-blue-400" />
+                            <span className="text-[10px] font-mono text-gray-300">{file}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </>
+              ) : (
                 <div className="whitespace-pre-wrap font-sans text-[13.5px] leading-relaxed break-words">{msg.content}</div>
               )}
             </div>
@@ -600,6 +706,12 @@ export function AiAssistant() {
                   content: aiStore.streamingText,
                   timestamp: Date.now() 
                 } as any)}
+                <div className="flex items-center space-x-1 mt-3 mb-1 px-1 opacity-60">
+                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                   <span className="text-[9px] font-mono text-blue-400 ml-2 uppercase tracking-widest animate-pulse">Reasoning...</span>
+                </div>
               </div>
             ) : (
               <div className="bg-[#2d2d2d] border border-white/5 rounded-2xl px-5 py-4 flex items-center space-x-3 shadow-lg">
@@ -626,9 +738,9 @@ export function AiAssistant() {
                 className="w-full text-left px-4 py-3 text-xs text-gray-300 hover:bg-blue-600 hover:text-white transition-all flex items-center space-x-3 group"
               >
                 <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/20">
-                  <FileCode size={12} className="text-blue-400 group-hover:text-white" />
+                  {f.isSpecial ? <AlertCircle size={12} className="text-red-400 group-hover:text-white" /> : <FileCode size={12} className="text-blue-400 group-hover:text-white" />}
                 </div>
-                <span>{f.name}</span>
+                <span>{f.isSpecial ? 'problems (Errors & Logs)' : f.name}</span>
               </button>
             ))}
           </div>

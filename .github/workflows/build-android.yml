@@ -41,21 +41,27 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
-      - name: Generate Android debug keystore
+      - name: Decode Android Keystore
         run: |
           mkdir -p ~/.android
-          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
+          # Fallback if secret not set (for local forks)
+          if [ ! -s android/app/release.keystore ]; then
+            keytool -genkey -v -keystore android/app/release.keystore -storepass "\${{ secrets.KEYSTORE_PASSWORD || '[REDACTED]' }}" -alias krypton -keypass "\${{ secrets.KEYSTORE_PASSWORD || '[REDACTED]' }}" -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+          fi
 
 
-      - name: Build Debug APK
+      - name: Build Release APK
         working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '[REDACTED]' }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: krypton-ide-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: krypton-ide-release
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 30

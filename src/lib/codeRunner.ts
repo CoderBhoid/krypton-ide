@@ -19,23 +19,53 @@ const PISTON_ENDPOINTS = [
 ];
 
 const LANGUAGE_MAP: Record<string, { language: string; version: string }> = {
+  // Web / Native
   'python': { language: 'python', version: '3.10.0' },
   'javascript': { language: 'javascript', version: '18.15.0' },
   'typescript': { language: 'typescript', version: '5.0.3' },
+  
+  // JVM & Managed
   'java': { language: 'java', version: '15.0.2' },
+  'kotlin': { language: 'kotlin', version: '1.9.21' },
+  'scala': { language: 'scala', version: '3.2.2' },
+  'csharp': { language: 'csharp', version: '6.12.0' },
+  'fsharp': { language: 'fsharp', version: '6.12.0' },
+  
+  // Systems & Compiled
   'cpp': { language: 'c++', version: '10.2.0' },
   'c': { language: 'c', version: '10.2.0' },
   'go': { language: 'go', version: '1.16.2' },
   'rust': { language: 'rust', version: '1.68.2' },
+  'swift': { language: 'swift', version: '5.3.3' },
+  'd': { language: 'd', version: '2.101.2' },
+  'zig': { language: 'zig', version: '0.10.1' },
+  'nim': { language: 'nim', version: '1.6.10' },
+  'v': { language: 'v', version: '0.3.3' },
+  'objective-c': { language: 'objective-c', version: '10.2.0' },
+  'assembly': { language: 'nasm', version: '2.15.5' },
+
+  // Dynamic & Scripting
   'ruby': { language: 'ruby', version: '3.0.1' },
   'php': { language: 'php', version: '8.2.3' },
-  'swift': { language: 'swift', version: '5.3.3' },
-  'kotlin': { language: 'kotlin', version: '1.9.21' },
   'dart': { language: 'dart', version: '2.19.6' },
   'shell': { language: 'bash', version: '5.2.0' },
   'lua': { language: 'lua', version: '5.4.4' },
   'perl': { language: 'perl', version: '5.36.0' },
   'r': { language: 'r', version: '4.1.1' },
+
+  // Functional & Exotic
+  'haskell': { language: 'haskell', version: '9.0.1' },
+  'elixir': { language: 'elixir', version: '1.11.3' },
+  'erlang': { language: 'erlang', version: '23.0.0' },
+  'clojure': { language: 'clojure', version: '1.10.3' },
+  'ocaml': { language: 'ocaml', version: '4.12.0' },
+  'lisp': { language: 'commonlisp', version: '2.1.2' },
+  'prolog': { language: 'prolog', version: '8.2.4' },
+  'brainfuck': { language: 'brainfuck', version: '2.7.3' },
+
+  // Legacy
+  'cobol': { language: 'cobol', version: '3.1.2' },
+  'fortran': { language: 'fortran', version: '10.2.0' },
 };
 
 export function canExecuteLanguage(language: string): boolean {
@@ -366,14 +396,12 @@ export async function executeCode(language: string, code: string, filename?: str
     return executePython(code);
   }
 
-  if (language === 'kotlin' || language === 'java') {
+  if (language === 'kotlin') {
     try {
       // Use provided target (jvm/wasm/js) or default to java (JVM)
       const ktTarget = (target === 'wasm' || target === 'js') ? target : 'java';
       return await executeKotlinPlayground(code, ktTarget);
     } catch (err: any) {
-      // For Kotlin/Java, we no longer fallback to Piston as it's whitelist-only
-      // Instead, we return a clear error about the playground connection
       return {
         success: false,
         output: '',
@@ -407,6 +435,25 @@ function getDefaultFilename(language: string): string {
     'lua': 'main.lua',
     'perl': 'main.pl',
     'r': 'main.r',
+    'scala': 'Main.scala',
+    'csharp': 'Program.cs',
+    'fsharp': 'Program.fs',
+    'd': 'main.d',
+    'zig': 'main.zig',
+    'nim': 'main.nim',
+    'v': 'main.v',
+    'objective-c': 'main.m',
+    'assembly': 'main.asm',
+    'haskell': 'main.hs',
+    'elixir': 'main.exs',
+    'erlang': 'main.erl',
+    'clojure': 'main.clj',
+    'ocaml': 'main.ml',
+    'lisp': 'main.lisp',
+    'prolog': 'main.pl',
+    'brainfuck': 'main.bf',
+    'cobol': 'main.cob',
+    'fortran': 'main.f90',
   };
   return map[language] || 'main.txt';
 }

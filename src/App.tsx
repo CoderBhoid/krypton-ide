@@ -86,10 +86,28 @@ export default function App() {
   // ── Global Theme Injector ──
   useEffect(() => {
     const isDark = theme === 'vs-dark' || theme === 'hc-black';
+    const bgColor = isDark ? '#0d1117' : '#ffffff';
+    const style = isDark ? Style.Dark : Style.Light;
+
+    // 1. Update DOM class for Tailwind & UI
     if (isDark) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+    }
+
+    // 2. Update Meta Theme Color (drives Android Navigation Bar in WebView)
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', bgColor);
+    }
+
+    // 3. Update Capacitor Status Bar
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setStyle({ style }).catch(e => console.warn('[App] StatusBar style error:', e));
+      if (Capacitor.getPlatform() === 'android') {
+        StatusBar.setBackgroundColor({ color: bgColor }).catch(e => console.warn('[App] StatusBar background error:', e));
+      }
     }
   }, [theme]);
 

@@ -20,7 +20,9 @@ export function BottomPanel({ onClose, height, setHeight }: BottomPanelProps) {
   const isKotlinOrJava = project?.template === 'kotlin-cli' || project?.template === 'java-cli';
 
   const [activeTab, setActiveTab] = useState<'terminal' | 'problems' | 'output' | 'console' | 'build'>('terminal');
-  const [consoleLogs, setConsoleLogs] = useState<{ type: string; args: string; ts: number }[]>([]);
+  const consoleLogs = useOutputStore(s => s.consoleLogs);
+  const addConsoleLog = useOutputStore(s => s.addConsoleLog);
+  const clearConsoleLogs = useOutputStore(s => s.clearConsoleLogs);
 
   // Automatically switch away from build tab if not an android project
   useEffect(() => {
@@ -34,7 +36,7 @@ export function BottomPanel({ onClose, height, setHeight }: BottomPanelProps) {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail) {
-        setConsoleLogs(prev => [...prev.slice(-500), { type: detail.level, args: detail.args, ts: Date.now() }]);
+        addConsoleLog({ type: detail.level, args: detail.args, ts: Date.now() });
       }
     };
     window.addEventListener('krypton-console-log', handler);
@@ -107,7 +109,7 @@ export function BottomPanel({ onClose, height, setHeight }: BottomPanelProps) {
         {activeTab === 'terminal' && <TerminalPanel />}
         {activeTab === 'problems' && <ProblemsPanel />}
         {activeTab === 'output' && <OutputPanel />}
-        {activeTab === 'console' && <ConsolePanel logs={consoleLogs} onClear={() => setConsoleLogs([])} />}
+        {activeTab === 'console' && <ConsolePanel logs={consoleLogs} onClear={clearConsoleLogs} />}
         {activeTab === 'build' && <BuildPanel onMinimize={onClose} />}
       </div>
   );

@@ -16,3 +16,11 @@ android/app/build/
 android/.gradle/
 android/build/
 android/local.properties
+
+# Krypton sensitive files (NEVER commit)
+KEYSTORE_BASE64.txt
+KEYSTORE_PASSWORD.txt
+KRYPTONKS.txt
+KEYSTORE_INFO.txt
+KEYSTORE_BASE64.txt
+metadata.json

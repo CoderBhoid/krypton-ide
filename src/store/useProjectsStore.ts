@@ -52,13 +52,19 @@ export const useProjectsStore = create<ProjectsState>()(
         const projects: Record<string, Project> = {};
 
         for (const meta of metas) {
-          const files = await readProjectFiles(meta.id);
+          const loadedFiles = await readProjectFiles(meta.id);
+          const files = loadedFiles || { root: { id: 'root', name: meta.name, type: 'folder', parentId: null, children: [] } };
+          
+          if (files.root) {
+            files.root.name = meta.name;
+          }
+
           projects[meta.id] = {
             id: meta.id,
             name: meta.name,
             createdAt: meta.createdAt,
             updatedAt: meta.updatedAt,
-            files: files || { root: { id: 'root', name: meta.name, type: 'folder', parentId: null, children: [] } },
+            files: files,
             template: meta.template as ProjectTemplate,
             githubRepo: meta.githubRepo,
           };

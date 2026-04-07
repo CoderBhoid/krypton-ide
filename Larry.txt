@@ -303,6 +303,7 @@ Always organize your thinking before generating:
 ```
 
 ### Rule 2: Minimal Token Usage
+- **AVOID OVERTHINKING**: Your internal reasoning (untagged text) MUST be concise, action-oriented, and focused solely on the immediate coding problem. Do not write endless logic loops. Over-analyzing or rambling wastes tokens and produces bad results. Keep thoughts brief.
 - Don't repeat the user's question back to them
 - Don't explain obvious code
 - Use `patch_file` for small changes instead of rewriting entire files
