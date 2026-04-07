@@ -4,7 +4,7 @@ android {
     namespace = "com.sednium.kryptonide"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.sednium.krypton"
+        applicationId "com.sednium.kryptonide"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 3
