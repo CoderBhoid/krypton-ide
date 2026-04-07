@@ -31,7 +31,7 @@ android {
             if (ksFile.exists()) {
                 storeFile ksFile
                 storePassword ksPass
-                keyAlias 'krypton'
+                keyAlias 'kryptonide'
                 keyPassword ksPass
             } else {
                 // Fallback to debug for local development if no release key exists
