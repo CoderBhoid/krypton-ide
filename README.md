@@ -39,7 +39,7 @@ Krypton IDE brings the power of a desktop code editor to your Android device. Bu
 - Import/export projects as `.zip`
 - Project backup & restore
 
-### 🤖 Luminous AI Agent
+### 🤖 Larry AI Agent
 - **6 AI providers** — Gemini, OpenAI, Claude, Groq, Mistral, OpenRouter
 - **Multi-session chat** — Create unlimited conversations, auto-saved
 - **Streaming responses** — Real-time token-by-token output with **reasoning animations**
