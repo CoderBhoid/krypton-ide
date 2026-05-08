@@ -13,6 +13,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { App as CapApp } from '@capacitor/app';
 import { Keyboard } from '@capacitor/keyboard';
 import { useBuildStore } from './store/useBuildStore';
+import { enableBackgroundMode, disableBackgroundMode } from './lib/backgroundMode';
 import {
   isStorageInitialized,
   readConfig,
@@ -171,8 +172,17 @@ export default function App() {
       }
     });
 
+    // App state change: save when backgrounded, re-acquire wake lock when foregrounded
+    const stateHandler = CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) {
+        // Going to background — save immediately
+        saveCurrentProject();
+      }
+    });
+
     return () => {
       backHandler.then(h => h.remove());
+      stateHandler.then(h => h.remove());
     };
   }, []);
 
@@ -250,6 +260,18 @@ export default function App() {
     };
     persistSettings();
   }, [theme, isHapticsEnabled, storageReady]);
+
+  // ── Background Mode: keep alive when a project is open ──
+  useEffect(() => {
+    if (currentProjectId) {
+      enableBackgroundMode();
+    } else {
+      disableBackgroundMode();
+    }
+    return () => {
+      disableBackgroundMode();
+    };
+  }, [currentProjectId]);
 
   const handleBackToProjects = () => {
     saveCurrentProject();

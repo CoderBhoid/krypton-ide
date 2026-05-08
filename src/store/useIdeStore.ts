@@ -401,7 +401,7 @@ export const useIdeStore = create<IdeState>()(
         segments.unshift(current.name);
         current = current.parentId ? files[current.parentId] : undefined as any;
       }
-      saveConfigNow();
+      return segments;
     },
     runTarget: 'java',
     setRunTarget: (target) => set({ runTarget: target }),

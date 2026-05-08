@@ -1,8 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronRight, ChevronDown, File, Folder, FileJson, FileCode2, FileText, Plus, FolderPlus, Trash2, Edit2, Search, Upload, Download, X, Copy, Share2, Save, Clipboard, FolderDown, MoreVertical } from 'lucide-react';
+import { ChevronRight, ChevronDown, File, Folder, FileJson, FileCode2, FileText, Plus, FolderPlus, Trash2, Edit2, Search, Upload, Download, X, Copy, Share2, Save, Clipboard, FolderDown, MoreVertical, ChevronsDownUp, ChevronsUpDown, Info } from 'lucide-react';
 import { useIdeStore, FileNode } from '../../store/useIdeStore';
 import { cn } from '../../lib/utils';
 import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 import JSZip from 'jszip';
 
 const getFileIcon = (name: string) => {
@@ -175,18 +176,99 @@ export function FileExplorer() {
     const node = files[nodeId];
     if (!node) return;
     try {
-      if (node.type === 'file' && node.content) {
-        await Share.share({
-          title: node.name,
-          text: node.content,
-          dialogTitle: `Share ${node.name}`,
-        });
-      } else {
-        await Share.share({
-          title: node.name,
-          text: `Shared from Krypton IDE: ${node.name}`,
-          dialogTitle: 'Share',
-        });
+      if (node.type === 'file' && node.content !== undefined) {
+        // On native: write temp file with correct extension and share file URI
+        if (Capacitor.isNativePlatform()) {
+          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          
+          // Write the file to cache directory with proper name
+          const tempPath = `share_temp/${node.name}`;
+          try {
+            await Filesystem.mkdir({
+              path: 'share_temp',
+              directory: Directory.Cache,
+              recursive: true,
+            });
+          } catch { /* already exists */ }
+          
+          await Filesystem.writeFile({
+            path: tempPath,
+            data: node.content,
+            directory: Directory.Cache,
+            encoding: (await import('@capacitor/filesystem')).Encoding.UTF8,
+          });
+          
+          // Get the native file URI
+          const uriResult = await Filesystem.getUri({
+            path: tempPath,
+            directory: Directory.Cache,
+          });
+          
+          await Share.share({
+            title: node.name,
+            url: uriResult.uri,
+            dialogTitle: `Share ${node.name}`,
+          });
+        } else {
+          // Web fallback: share as text
+          await Share.share({
+            title: node.name,
+            text: node.content,
+            dialogTitle: `Share ${node.name}`,
+          });
+        }
+      } else if (node.type === 'folder') {
+        // For folders: create a ZIP and share it
+        if (Capacitor.isNativePlatform()) {
+          const zip = new JSZip();
+          const addToZip = (nId: string, path: string) => {
+            const n = files[nId];
+            if (!n) return;
+            if (n.type === 'file' && n.content !== undefined) {
+              zip.file(`${path}${n.name}`, n.content);
+            } else if (n.type === 'folder' && n.children) {
+              const newPath = nId === nodeId ? '' : `${path}${n.name}/`;
+              n.children.forEach(cId => addToZip(cId, newPath));
+            }
+          };
+          addToZip(nodeId, '');
+          
+          const blob = await zip.generateAsync({ type: 'base64' });
+          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          
+          const zipName = `${node.name}.zip`;
+          const tempPath = `share_temp/${zipName}`;
+          try {
+            await Filesystem.mkdir({
+              path: 'share_temp',
+              directory: Directory.Cache,
+              recursive: true,
+            });
+          } catch { /* already exists */ }
+          
+          await Filesystem.writeFile({
+            path: tempPath,
+            data: blob,
+            directory: Directory.Cache,
+          });
+          
+          const uriResult = await Filesystem.getUri({
+            path: tempPath,
+            directory: Directory.Cache,
+          });
+          
+          await Share.share({
+            title: zipName,
+            url: uriResult.uri,
+            dialogTitle: `Share ${node.name}`,
+          });
+        } else {
+          await Share.share({
+            title: node.name,
+            text: `Shared from Krypton IDE: ${node.name}`,
+            dialogTitle: 'Share',
+          });
+        }
       }
     } catch {
       // User cancelled or share not available
@@ -231,7 +313,12 @@ export function FileExplorer() {
     items.push({ label: 'Share', icon: <Share2 size={14} />, onClick: () => shareFile(nodeId), divider: true });
 
     if (isFile) {
-      items.push({ label: 'Send to Agent', icon: <FileText size={14} />, onClick: () => sendToAgent(nodeId) });
+      items.push({ label: 'Send to Larry', icon: <FileText size={14} />, onClick: () => sendToAgent(nodeId) });
+      // Show file size
+      const content = node.content || '';
+      const bytes = new Blob([content]).size;
+      const sizeStr = bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      items.push({ label: `Size: ${sizeStr}`, icon: <Info size={14} />, onClick: () => {} });
     }
 
     if (!isRoot) {
@@ -446,7 +533,7 @@ export function FileExplorer() {
           </div>
         </div>
 
-        {/* Import / Export row */}
+        {/* Import / Export / Collapse / Expand row */}
         <div className="flex items-center space-x-1">
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -461,6 +548,29 @@ export function FileExplorer() {
           >
             <Download size={12} />
             <span>Export</span>
+          </button>
+          <button
+            onClick={() => {
+              // Expand all folders
+              const allFolderIds = Object.entries(files)
+                .filter(([_, f]) => f.type === 'folder')
+                .map(([id]) => id);
+              setExpandedFolders(new Set(allFolderIds));
+            }}
+            className="flex items-center justify-center bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] p-1.5 rounded text-gray-400 hover:text-white transition-colors"
+            title="Expand All"
+          >
+            <ChevronsUpDown size={14} />
+          </button>
+          <button
+            onClick={() => {
+              // Collapse all — keep only root open
+              setExpandedFolders(new Set(['root']));
+            }}
+            className="flex items-center justify-center bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] p-1.5 rounded text-gray-400 hover:text-white transition-colors"
+            title="Collapse All"
+          >
+            <ChevronsDownUp size={14} />
           </button>
         </div>
       </div>

@@ -302,6 +302,19 @@ export function AiAssistant() {
 
   const renderMessageContent = (content: string, msg: Message) => {
     if (msg.role === 'tool') return <ToolResultBlock msg={msg} />;
+
+    // If this is a tool-call-only message (no visible text content), show a tool indicator
+    if (msg.tool_calls && msg.tool_calls.length > 0 && (!content || content.trim() === '')) {
+      return (
+        <div className="flex items-center gap-2 text-xs text-gray-500 italic py-1">
+          <Loader2 size={12} className="animate-spin text-blue-400" />
+          <span>Using {msg.tool_calls.map(tc => tc.function?.name || tc.name || 'tool').join(', ')}...</span>
+        </div>
+      );
+    }
+
+    // If content is empty (and no tool calls), don't render anything
+    if (!content || content.trim() === '') return null;
     
     // Check if the message contains any of our special tags
     const hasTags = content.includes('<ans>') || content.includes('<edit ') || content.includes('<plan>') || content.includes('<status>');
@@ -387,7 +400,7 @@ export function AiAssistant() {
         <div className="space-y-2">
           <h3 className="text-xl font-bold text-white tracking-tight border-b border-white/10 pb-2 inline-block">Larry Elite</h3>
           <p className="text-sm text-gray-400 max-w-[240px] leading-relaxed">
-            Unleash the full power of agentic coding assistance. Connect your Sednium API keys to begin.
+            Unleash the full power of Larry AI. Connect your Sednium API keys to begin.
           </p>
         </div>
         <button 
@@ -646,7 +659,7 @@ export function AiAssistant() {
                <Bot size={32} className="text-blue-500/30" />
             </div>
             <p className="text-sm text-gray-500 leading-relaxed max-w-[200px]">
-              Krypton's agentic core is online. Tag context with <span className="text-blue-400 font-mono">@</span>.
+              Larry is online. Tag context with <span className="text-blue-400 font-mono">@</span>.
             </p>
             <div className="mt-8 grid grid-cols-1 gap-2 w-full">
               {['@App.tsx fix the layout', 'Optimize @index.css', 'Create a new utility file'].map(suggestion => (
@@ -661,7 +674,12 @@ export function AiAssistant() {
             </div>
           </div>
         )}
-        {aiMessages.filter(m => m.role !== 'system').map((msg, i) => (
+        {aiMessages.filter(m => {
+          if (m.role === 'system') return false;
+          // Hide empty assistant messages that have no tool calls and no content
+          if (m.role === 'assistant' && (!m.content || m.content.trim() === '') && (!m.tool_calls || m.tool_calls.length === 0)) return false;
+          return true;
+        }).map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full animate-fade-in`}>
             <div className={`max-w-[100%] rounded-2xl px-4 py-3 ${
               msg.role === 'user' 

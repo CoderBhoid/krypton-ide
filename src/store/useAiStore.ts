@@ -60,7 +60,6 @@ interface AiState {
   apiKey: string;
   model: string;
   baseUrl: string;
-  baseUrl: string;
   
   savedModels: SavedModel[];
   activeModelId?: string;
@@ -90,7 +89,6 @@ interface AiState {
   // Clear all session state (when closing a project)
   clearSessions: () => void;
   
-  // The Engine
   // The Engine
   sendMessage: (sessionId: string, userPrompt: string, systemContext: string, attachments?: AttachedFile[]) => Promise<void>;
   handleRecursiveChat: (sessionId: string, provider: string, key: string, model: string, baseUrl: string, systemContext: string, startTime: number) => Promise<void>;
@@ -363,11 +361,16 @@ export const useAiStore = create<AiState>()((set, get) => ({
 
     const tools = ModelAdapters.getToolsForProvider(provider);
 
-    // 2. API Call (Simplified for persistence)
+    // 2. API Call
     const geminiModel = model.startsWith('models/') ? model.replace('models/', '') : model;
-    const url = provider === 'gemini' 
-      ? `${baseUrl}/models/${geminiModel}:streamGenerateContent?alt=sse&key=${key}`
-      : `${baseUrl}/chat/completions`;
+    let url: string;
+    if (provider === 'gemini') {
+      url = `${baseUrl}/models/${geminiModel}:streamGenerateContent?alt=sse&key=${key}`;
+    } else if (provider === 'anthropic') {
+      url = `${baseUrl}/messages`;
+    } else {
+      url = `${baseUrl}/chat/completions`;
+    }
 
     const headers: any = { 'Content-Type': 'application/json' };
     if (provider !== 'gemini' && provider !== 'anthropic') headers['Authorization'] = `Bearer ${key}`;
@@ -399,10 +402,44 @@ export const useAiStore = create<AiState>()((set, get) => ({
       });
       body.systemInstruction = { parts: [{ text: systemContext }] };
       body.tools = tools;
+    } else if (provider === 'anthropic') {
+      // Anthropic Messages API format
+      body = {
+        model,
+        system: systemContext,
+        max_tokens: 8192,
+        messages: providerMessages.map((msg: any) => {
+          const ogMatch = session.messages.find(m => m.content === (typeof msg.content === 'string' ? msg.content : ''));
+          if (ogMatch && ogMatch.attachments && ogMatch.attachments.length > 0) {
+            const imgContents = ogMatch.attachments.map(att => ({
+              type: 'image' as const,
+              source: {
+                type: 'base64' as const,
+                media_type: att.type,
+                data: att.data.includes('base64,') ? att.data.split(',')[1] : att.data
+              }
+            }));
+            return {
+              ...msg,
+              content: [
+                { type: 'text', text: typeof msg.content === 'string' ? msg.content : '' },
+                ...imgContents
+              ]
+            };
+          }
+          return msg;
+        }),
+        tools: tools,
+        stream: true
+      };
     } else {
-      // For OpenAI/Anthropic/others: Attachments fall back to base64 texts or are excluded for now depending on adapter
-      // Often you'd pass type: 'image_url' for OpenAI. We inject it manually here if attachments exist.
-      body = { model, messages: providerMessages.map((msg: any) => {
+      // For OpenAI/Groq/Mistral/OpenRouter: OpenAI-compatible format
+      // Re-inject system message into messages array (OpenAI supports role: 'system')
+      const messagesWithSystem = [
+        { role: 'system', content: systemContext },
+        ...providerMessages
+      ];
+      body = { model, messages: messagesWithSystem.map((msg: any) => {
         const ogMatch = session.messages.find(m => m.content === msg.content);
         if (ogMatch && ogMatch.attachments && ogMatch.attachments.length > 0 && provider === 'openai') {
            const imgContents = ogMatch.attachments.map(att => ({

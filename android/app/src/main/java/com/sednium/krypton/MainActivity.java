@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         registerPlugin(ApkInstallerPlugin.class);
+        registerPlugin(BackgroundModePlugin.class);
         
         // Trigger the professional permission flow
         checkStoragePermission();

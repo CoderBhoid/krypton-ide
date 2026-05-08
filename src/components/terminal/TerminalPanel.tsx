@@ -265,12 +265,27 @@ export function TerminalPanel() {
         default:
           // Handle paste (multi-character input)
           if (e.length > 1 && !e.startsWith('\x1b')) {
-            // Paste — only take first line
-            const firstLine = e.split('\n')[0].split('\r')[0];
-            for (const ch of firstLine) {
-              if (ch >= String.fromCharCode(0x20) && ch <= String.fromCharCode(0x7E) || ch >= '\u00a0') {
-                currentLine += ch;
-                term.write(ch);
+            // Paste — allow all lines and characters, removing artificial limits
+            const lines = e.split(/\r?\n/);
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              for (const ch of line) {
+                if (ch >= String.fromCharCode(0x20) && ch <= String.fromCharCode(0x7E) || ch >= '\u00a0') {
+                  currentLine += ch;
+                  term.write(ch);
+                }
+              }
+              if (i < lines.length - 1) {
+                // Execute each line natively if it's a multiline paste
+                term.write('\r\n');
+                if (currentLine.trim().length > 0) {
+                  commandHistory.push(currentLine);
+                  historyIndex = commandHistory.length;
+                  handleCommand(currentLine);
+                } else {
+                  prompt();
+                }
+                currentLine = '';
               }
             }
           } else if (e >= String.fromCharCode(0x20) && e <= String.fromCharCode(0x7E) || e >= '\u00a0') {

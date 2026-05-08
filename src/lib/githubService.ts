@@ -361,5 +361,17 @@ export async function pullRepo(owner: string, repo: string): Promise<number> {
 
   // Load into IDE
   useIdeStore.getState().loadProject(newFiles);
+
+  // Also persist to the project store so files survive closing/reopening
+  try {
+    const { useProjectsStore } = await import('../store/useProjectsStore');
+    const projectId = useProjectsStore.getState().currentProjectId;
+    if (projectId) {
+      useProjectsStore.getState().updateProjectFiles(projectId, newFiles);
+    }
+  } catch (e) {
+    console.warn('[pullRepo] Failed to persist pulled files to project store:', e);
+  }
+
   return fileCount;
 }

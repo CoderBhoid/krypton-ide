@@ -41,9 +41,19 @@ export function LivePreview({ onClose }: LivePreviewProps) {
   const jsxFiles = Object.values(files).filter(
     f => f.type === 'file' && (f.name.endsWith('.jsx') || f.name.endsWith('.tsx'))
   );
-  const hasReactProject = !hasHtmlFile && jsxFiles.length > 0 && jsxFiles.some(
+
+  // Detect Vite/Next.js projects: they have index.html with <script type="module"> which can't work in blob URLs
+  const isViteOrModuleProject = useMemo(() => {
+    if (!hasHtmlFile) return false;
+    const htmlFile = Object.values(files).find(f => f.type === 'file' && f.name.toLowerCase() === 'index.html');
+    if (!htmlFile?.content) return false;
+    // Check if the HTML references module scripts that point to source files (e.g. /src/main.jsx)
+    return /type=["']module["']/.test(htmlFile.content) && /src=["']\/?(src\/|\.\/src)/.test(htmlFile.content);
+  }, [files, hasHtmlFile]);
+
+  const hasReactProject = ((!hasHtmlFile || isViteOrModuleProject) && jsxFiles.length > 0 && jsxFiles.some(
     f => f.content?.includes('React') || f.content?.includes('react') || f.content?.includes('jsx') || f.content?.includes('useState')
-  );
+  ));
 
   const isMarkdownPreview = activeFile?.type === 'file' && (activeFile.name.endsWith('.md') || activeFile.language === 'markdown');
 
@@ -90,10 +100,10 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     for (const jsFile of jsFiles) {
       if (jsFile.content) {
         const babelPattern = new RegExp(
-          `<script[^>]*type=["']text/babel["'][^>]*src=["']${escapeRegex(jsFile.name)}["'][^>]*>\\s*</script>`, 'gi'
+          `<script[^>]*type=["']text/babel["'][^>]*src=["']${escapeRegex(jsFile.name)}["'][^>]*>\s*</script>`, 'gi'
         );
         const scriptPattern = new RegExp(
-          `<script[^>]*src=["']${escapeRegex(jsFile.name)}["'][^>]*>\\s*</script>`, 'gi'
+          `<script[^>]*src=["']${escapeRegex(jsFile.name)}["'][^>]*>\s*</script>`, 'gi'
         );
         
         if (babelPattern.test(html)) {

@@ -87,7 +87,7 @@ export function SettingsPanel() {
     if (!Capacitor.isNativePlatform()) {
       try {
         GoogleAuth.initialize({
-          clientId: '228869160750-nqir9tev4919koqbcsrnhfo5puorqtqa.apps.googleusercontent.com',
+          clientId: '228869160750-fdpk4fr81gge00ioocrdgnq28apprrj2.apps.googleusercontent.com',
           scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
           grantOfflineAccess: true,
         });

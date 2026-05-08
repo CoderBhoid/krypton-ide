@@ -118,15 +118,54 @@ export const ModelAdapters = {
   parseStreamChunk(provider: string, chunkText: string): NormalizedMessage | null {
     try {
       let jsonStr = chunkText.trim();
+
+      // Skip SSE event-type lines (e.g. "event: content_block_delta")
+      if (jsonStr.startsWith('event:')) return null;
       
-      // OpenAI / Gemini (alt=sse) / Groq / Mistral (SSE format: data: {...})
+      // OpenAI / Gemini (alt=sse) / Groq / Mistral / Anthropic (SSE format: data: {...})
       if (jsonStr.startsWith('data: ')) {
         jsonStr = jsonStr.replace(/^data: /, '').trim();
         if (jsonStr === '[DONE]') return null;
         
         const data = JSON.parse(jsonStr);
+
+        // ── Anthropic SSE streaming format ──
+        // Anthropic sends typed events: content_block_start, content_block_delta, etc.
+        if (provider === 'anthropic' || data.type === 'content_block_delta' || data.type === 'content_block_start' || data.type === 'message_delta') {
+          // Text delta: { type: "content_block_delta", delta: { type: "text_delta", text: "..." } }
+          if (data.type === 'content_block_delta') {
+            if (data.delta?.type === 'text_delta') {
+              return { role: 'assistant', content: data.delta.text || '' };
+            }
+            // Tool input delta: { delta: { type: "input_json_delta", partial_json: "..." } }
+            if (data.delta?.type === 'input_json_delta') {
+              return {
+                role: 'assistant',
+                tool_calls: [{
+                  id: data.index != null ? `tc-${data.index}` : `tc-0`,
+                  name: '',
+                  arguments: data.delta.partial_json || ''
+                }]
+              };
+            }
+            return null;
+          }
+          // Tool use start: { type: "content_block_start", content_block: { type: "tool_use", id: "...", name: "..." } }
+          if (data.type === 'content_block_start' && data.content_block?.type === 'tool_use') {
+            return {
+              role: 'assistant',
+              tool_calls: [{
+                id: data.content_block.id || `tc-${data.index || 0}`,
+                name: data.content_block.name || '',
+                arguments: ''
+              }]
+            };
+          }
+          // message_start / message_delta / content_block_stop / message_stop — skip
+          return null;
+        }
         
-        // Gemini SSE format
+        // ── Gemini SSE format ──
         if (provider === 'gemini' || data.candidates) {
           const candidate = data.candidates?.[0];
           const part = candidate?.content?.parts?.[0];
@@ -144,7 +183,7 @@ export const ModelAdapters = {
           return { role: 'assistant', content: part?.text || '' };
         }
 
-        // OpenAI-compatible SSE format
+        // ── OpenAI-compatible SSE format ──
         const delta = data.choices?.[0]?.delta;
         if (delta?.tool_calls) {
           return {
@@ -162,7 +201,11 @@ export const ModelAdapters = {
       // Legacy/Direct JSON Fallback
       if (jsonStr.startsWith('{')) {
         const data = JSON.parse(jsonStr);
-        // ... handled like Gemini above ...
+        // Anthropic non-streaming fallback
+        if (data.type === 'content_block_delta' && data.delta?.text) {
+          return { role: 'assistant', content: data.delta.text };
+        }
+        // Gemini fallback
         const candidate = data.candidates?.[0];
         const part = candidate?.content?.parts?.[0];
         return { role: 'assistant', content: part?.text || '' };
@@ -178,11 +221,14 @@ export const ModelAdapters = {
    * Translates our internal history into provider-specific history format
    */
   formatHistoryForProvider(provider: string, messages: NormalizedMessage[]): any[] {
+    // Filter out system messages — they are injected at the request body level, not in the messages array
+    const filtered = messages.filter(m => m.role !== 'system');
+
     switch (provider) {
       case 'gemini':
         // Gemini expects role: 'model' instead of 'assistant'
         // and uses contents array with parts
-        return messages.map(m => {
+        return filtered.map(m => {
           if (m.role === 'tool') {
             return {
               role: 'function',
@@ -213,7 +259,7 @@ export const ModelAdapters = {
 
       case 'anthropic':
         // Anthropic handles tool results as part of the messages stream
-        return messages.map(m => {
+        return filtered.map(m => {
           if (m.role === 'tool') {
             return {
               role: 'user',
@@ -243,7 +289,7 @@ export const ModelAdapters = {
 
       default:
         // OpenAI format
-        return messages.map(m => {
+        return filtered.map(m => {
           if (m.role === 'tool') {
             return {
               role: 'tool',

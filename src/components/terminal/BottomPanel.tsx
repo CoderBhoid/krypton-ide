@@ -232,7 +232,7 @@ function ProblemsPanel() {
             title="Send all problems to Larry AI"
           >
             <Send size={11} />
-            <span>Send to Agent</span>
+            <span>Send to Larry</span>
           </button>
         </div>
       </div>

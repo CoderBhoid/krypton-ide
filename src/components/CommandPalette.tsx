@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, File, Moon, Sun, Monitor, PanelLeft, TerminalSquare, Play, Plus, FolderPlus, Palette, ArrowLeft } from 'lucide-react';
+import { Search, File, Moon, Sun, Monitor, PanelLeft, TerminalSquare, Play, Plus, FolderPlus, Palette, ArrowLeft, Hash, Replace, SearchCode } from 'lucide-react';
 import { useIdeStore } from '../store/useIdeStore';
 
 interface Command {
@@ -63,6 +63,26 @@ export function CommandPalette({ onRunProject, onBackToProjects }: CommandPalett
       { id: 'theme-light', label: 'Theme: Light', icon: <Sun size={16} />, action: () => { setTheme('light'); setCommandPaletteOpen(false); }},
       { id: 'theme-hc', label: 'Theme: High Contrast', icon: <Monitor size={16} />, action: () => { setTheme('hc-black'); setCommandPaletteOpen(false); }},
       { id: 'back', label: 'Back to Projects', icon: <ArrowLeft size={16} />, action: () => { onBackToProjects(); setCommandPaletteOpen(false); }},
+      { id: 'goto-line', label: 'Go to Line...', description: 'Jump to a specific line number', icon: <Hash size={16} />, action: () => {
+        setCommandPaletteOpen(false);
+        setTimeout(() => {
+          const lineStr = prompt('Go to Line:');
+          if (lineStr) {
+            const line = parseInt(lineStr, 10);
+            if (!isNaN(line) && line > 0) {
+              // Dispatch a custom event that CodeEditor listens for
+              window.dispatchEvent(new CustomEvent('krypton-goto-line', { detail: { line } }));
+            }
+          }
+        }, 100);
+      }, shortcut: 'Ctrl+G' },
+      { id: 'find-replace', label: 'Find and Replace', description: 'Search in current file', icon: <Replace size={16} />, action: () => {
+        setCommandPaletteOpen(false);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('krypton-find-replace'));
+        }, 100);
+      }, shortcut: 'Ctrl+H' },
+      { id: 'search-files', label: 'Search in Files', description: 'Search across all project files', icon: <SearchCode size={16} />, action: () => { setSidebarView('search'); setCommandPaletteOpen(false); }, shortcut: 'Ctrl+Shift+F' },
     ];
 
     // Add all files as "Open File" commands

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Editor, { useMonaco } from '@monaco-editor/react';
 import { useIdeStore } from '../../store/useIdeStore';
-import { X, Keyboard, FileCode2, Zap, Eye, Code2, Paintbrush, Scissors, Copy, ClipboardPaste, Bot } from 'lucide-react';
+import { X, Keyboard, FileCode2, Zap, Eye, Code2, Paintbrush, Scissors, Copy, ClipboardPaste, Bot, Undo2, Redo2, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MarkdownPreview } from './MarkdownPreview';
 import { formatCode } from '../../lib/formatter';
@@ -34,6 +34,31 @@ export function CodeEditor() {
       });
     }, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Listen for Go to Line command from Command Palette
+  useEffect(() => {
+    const handleGotoLine = (e: Event) => {
+      const line = (e as CustomEvent).detail?.line;
+      if (editorRef.current && line) {
+        editorRef.current.revealLineInCenter(line);
+        editorRef.current.setPosition({ lineNumber: line, column: 1 });
+        editorRef.current.focus();
+      }
+    };
+    window.addEventListener('krypton-goto-line', handleGotoLine);
+    return () => window.removeEventListener('krypton-goto-line', handleGotoLine);
+  }, []);
+
+  // Listen for Find & Replace command from Command Palette
+  useEffect(() => {
+    const handleFindReplace = () => {
+      if (editorRef.current) {
+        editorRef.current.getAction('editor.action.startFindReplaceAction')?.run();
+      }
+    };
+    window.addEventListener('krypton-find-replace', handleFindReplace);
+    return () => window.removeEventListener('krypton-find-replace', handleFindReplace);
   }, []);
 
   const activeFile = activeFileId ? files[activeFileId] : null;
@@ -163,11 +188,46 @@ export function CodeEditor() {
     };
   }, []);
 
-  const handleEditorChange = (value: string | undefined) => {
-    if (activeFileId && value !== undefined) {
-      updateFileContent(activeFileId, value);
+  // Debounce editor changes to prevent crash when holding backspace.
+  // Rapid-fire Monaco onChange events (60fps on key-repeat) cause
+  // a zustand state-spread storm that OOMs mobile devices.
+  const editorChangeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestValue = useRef<string | undefined>(undefined);
+
+  // Bug fix: clean up debounce timer on unmount to prevent stale updates
+  useEffect(() => {
+    return () => {
+      if (editorChangeTimer.current) {
+        clearTimeout(editorChangeTimer.current);
+      }
+    };
+  }, []);
+
+  const handleEditorChange = useCallback((value: string | undefined) => {
+    if (!activeFileId || value === undefined) return;
+    latestValue.current = value;
+
+    if (editorChangeTimer.current) {
+      clearTimeout(editorChangeTimer.current);
     }
-  };
+    editorChangeTimer.current = setTimeout(() => {
+      if (latestValue.current !== undefined) {
+        updateFileContent(activeFileId, latestValue.current);
+      }
+    }, 50); // 50ms debounce — imperceptible, prevents OOM
+  }, [activeFileId, updateFileContent]);
+
+  // Ref to store cleanup function for touch listeners added in handleEditorMount
+  const touchCleanupRef = useRef<(() => void) | null>(null);
+
+  // Bug fix: clean up touch listeners on unmount to prevent listener stacking
+  useEffect(() => {
+    return () => {
+      if (touchCleanupRef.current) {
+        touchCleanupRef.current();
+      }
+    };
+  }, []);
 
   const handleEditorMount = useCallback((editor: any, monacoApi: any) => {
     setEditorInstance(editor);
@@ -241,8 +301,8 @@ export function CodeEditor() {
     const MOVE_THRESHOLD = 15; // Allow 15px of drift for mobile stability
     
     const editorDom = editor.getDomNode();
-    if (editorDom) {
-      editorDom.addEventListener('touchstart', (e: any) => {
+    // Store named references so we can remove them on cleanup
+    const onTouchStart = (e: any) => {
         if (e.touches.length !== 1) return;
         const touch = e.touches[0];
         startX = touch.clientX;
@@ -289,13 +349,11 @@ export function CodeEditor() {
             if (err?.type !== 'cancelation') console.error('Long press error:', err);
           }
         }, 500);
-      }, { passive: true });
-
-      editorDom.addEventListener('touchend', () => {
+    };
+    const onTouchEnd = () => {
         if (touchTimer) clearTimeout(touchTimer);
-      }, { passive: true });
-
-      editorDom.addEventListener('touchmove', (e: any) => {
+    };
+    const onTouchMove = (e: any) => {
         if (!e.touches[0]) return;
         const moveX = Math.abs(e.touches[0].clientX - startX);
         const moveY = Math.abs(e.touches[0].clientY - startY);
@@ -303,19 +361,40 @@ export function CodeEditor() {
         if (moveX > MOVE_THRESHOLD || moveY > MOVE_THRESHOLD) {
           if (touchTimer) clearTimeout(touchTimer);
         }
-      }, { passive: true });
+    };
+
+    if (editorDom) {
+      editorDom.addEventListener('touchstart', onTouchStart, { passive: true });
+      editorDom.addEventListener('touchend', onTouchEnd, { passive: true });
+      editorDom.addEventListener('touchmove', onTouchMove, { passive: true });
     }
 
     // Attach global deselection listener
     const container = editor.getDomNode()?.parentElement;
+    let onContainerTouchStart: any, onContainerTouchMove: any, onContainerTouchEnd: any;
     if (container) {
       let isScrolling = false;
-      container.addEventListener('touchstart', () => { isScrolling = false; }, { passive: true });
-      container.addEventListener('touchmove', () => { isScrolling = true; }, { passive: true });
-      container.addEventListener('touchend', (e) => {
-        if (!isScrolling) handleGlobalTouch(e);
-      }, { passive: true });
+      onContainerTouchStart = () => { isScrolling = false; };
+      onContainerTouchMove = () => { isScrolling = true; };
+      onContainerTouchEnd = (e: any) => { if (!isScrolling) handleGlobalTouch(e); };
+      container.addEventListener('touchstart', onContainerTouchStart, { passive: true });
+      container.addEventListener('touchmove', onContainerTouchMove, { passive: true });
+      container.addEventListener('touchend', onContainerTouchEnd, { passive: true });
     }
+
+    // Store cleanup function so we can remove all touch listeners on unmount
+    touchCleanupRef.current = () => {
+      if (editorDom) {
+        editorDom.removeEventListener('touchstart', onTouchStart);
+        editorDom.removeEventListener('touchend', onTouchEnd);
+        editorDom.removeEventListener('touchmove', onTouchMove);
+      }
+      if (container) {
+        container.removeEventListener('touchstart', onContainerTouchStart);
+        container.removeEventListener('touchmove', onContainerTouchMove);
+        container.removeEventListener('touchend', onContainerTouchEnd);
+      }
+    };
 
     // Configure Advanced IntelliSense for React/TSX
     monacoApi.languages.typescript.typescriptDefaults.setCompilerOptions({
@@ -586,7 +665,7 @@ export function CodeEditor() {
                         selectionHighlight: false,
                         hover: { enabled: false },
                         parameterHints: { enabled: false },
-                        lightbulb: { enabled: false },
+                        lightbulb: { enabled: 'off' as any },
                       }}
                     />
                   </div>
@@ -635,7 +714,7 @@ export function CodeEditor() {
                     selectionHighlight: false,
                     hover: { enabled: false },
                     parameterHints: { enabled: false },
-                    lightbulb: { enabled: false },
+                    lightbulb: { enabled: 'off' as any },
                   }}
                   loading={
                     <div className="flex h-full items-center justify-center text-gray-500">
@@ -654,6 +733,78 @@ export function CodeEditor() {
                   style={{ bottom: keyboardHeight > 0 ? `${keyboardHeight}px` : 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
                 >
                   <div className="flex items-center justify-center px-1.5 text-gray-500 flex-shrink-0"><Keyboard size={15}/></div>
+                  {/* Undo / Redo buttons */}
+                  <button 
+                    onClick={(e) => { 
+                      e.preventDefault(); 
+                      editorRef.current?.trigger('keyboard', 'undo', null);
+                      editorRef.current?.focus();
+                      if (Capacitor.isNativePlatform() && useIdeStore.getState().isHapticsEnabled) {
+                        Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+                      }
+                    }} 
+                    className="flex-shrink-0 bg-white dark:bg-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#4c4c4c] active:bg-blue-600 active:text-white text-gray-800 dark:text-white min-w-[36px] h-[34px] flex items-center justify-center rounded-md text-sm transition-colors border border-gray-200 dark:border-[#4a4a4a] select-none touch-manipulation shadow-sm"
+                    title="Undo"
+                  >
+                    <Undo2 size={15} />
+                  </button>
+                  <button 
+                    onClick={(e) => { 
+                      e.preventDefault(); 
+                      editorRef.current?.trigger('keyboard', 'redo', null);
+                      editorRef.current?.focus();
+                      if (Capacitor.isNativePlatform() && useIdeStore.getState().isHapticsEnabled) {
+                        Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+                      }
+                    }} 
+                    className="flex-shrink-0 bg-white dark:bg-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#4c4c4c] active:bg-blue-600 active:text-white text-gray-800 dark:text-white min-w-[36px] h-[34px] flex items-center justify-center rounded-md text-sm transition-colors border border-gray-200 dark:border-[#4a4a4a] select-none touch-manipulation shadow-sm"
+                    title="Redo"
+                  >
+                    <Redo2 size={15} />
+                  </button>
+                  {/* Find in file button */}
+                  <button 
+                    onClick={(e) => { 
+                      e.preventDefault(); 
+                      editorRef.current?.getAction('editor.action.startFindReplaceAction')?.run();
+                      if (Capacitor.isNativePlatform() && useIdeStore.getState().isHapticsEnabled) {
+                        Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+                      }
+                    }} 
+                    className="flex-shrink-0 bg-white dark:bg-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#4c4c4c] active:bg-blue-600 active:text-white text-gray-800 dark:text-white min-w-[36px] h-[34px] flex items-center justify-center rounded-md text-sm transition-colors border border-gray-200 dark:border-[#4a4a4a] select-none touch-manipulation shadow-sm"
+                    title="Find & Replace"
+                  >
+                    <Search size={15} />
+                  </button>
+                  {/* Paste button */}
+                  <button 
+                    onClick={async (e) => { 
+                      e.preventDefault(); 
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (text && editorRef.current && monaco) {
+                          const position = editorRef.current.getPosition();
+                          editorRef.current.executeEdits('krypton-paste', [{
+                            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                            text: text,
+                            forceMoveMarkers: true
+                          }]);
+                          editorRef.current.focus();
+                        }
+                      } catch (err) {
+                        console.error("Paste failed", err);
+                      }
+                      if (Capacitor.isNativePlatform() && useIdeStore.getState().isHapticsEnabled) {
+                        Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+                      }
+                    }} 
+                    className="flex-shrink-0 bg-white dark:bg-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#4c4c4c] active:bg-blue-600 active:text-white text-gray-800 dark:text-white min-w-[36px] h-[34px] flex items-center justify-center rounded-md text-sm transition-colors border border-gray-200 dark:border-[#4a4a4a] select-none touch-manipulation shadow-sm"
+                    title="Paste"
+                  >
+                    <ClipboardPaste size={15} />
+                  </button>
+                  {/* Divider */}
+                  <div className="w-px h-5 bg-gray-300 dark:bg-[#555] flex-shrink-0 mx-0.5" />
                   {keys.map(k => (
                     <button 
                       key={k} 
@@ -728,7 +879,7 @@ export function CodeEditor() {
                     <span>Select All</span>
                   </button>
                   <button onClick={() => handleSelectionAction('ai')} className="flex items-center space-x-1.5 px-4 h-full bg-[#32204c] text-purple-400 hover:text-purple-300 text-[11px] font-bold transition-colors">
-                    <Bot size={14} /> <span>AI Agent</span>
+                    <Bot size={14} /> <span>Larry</span>
                   </button>
                 </div>
               </div>

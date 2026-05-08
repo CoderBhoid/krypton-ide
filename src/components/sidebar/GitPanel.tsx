@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GitCommit, GitPullRequest, GitMerge, Check, RefreshCw, Loader, Github, CloudUpload, CloudDownload, Plus, Link, Unlink, ExternalLink, Search, Lock, Globe } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useAuthStore, type GitHubUser } from '../../store/useAuthStore';
+import { useProjectsStore } from '../../store/useProjectsStore';
 import { getGitStatus, commitChanges } from '../../lib/gitService';
 import { listRepos, createRepo, pushProject, pullRepo, type GitHubRepo, type PushResult } from '../../lib/githubService';
 import { startDeviceFlow, type DeviceFlowSession } from '../../lib/githubOAuth';
@@ -161,6 +162,26 @@ function GitHubTab() {
   const [newRepoPrivate, setNewRepoPrivate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  // ── Sync githubRepoLink with current project's githubRepo ──
+  const currentProjectId = useProjectsStore(s => s.currentProjectId);
+  const currentProject = useProjectsStore(s => s.currentProjectId ? s.projects[s.currentProjectId] : null);
+  
+  useEffect(() => {
+    if (currentProject?.githubRepo) {
+      const [owner, repo] = currentProject.githubRepo.split('/');
+      if (owner && repo) {
+        // Only update if different to avoid infinite loops
+        const current = githubRepoLink;
+        if (!current || current.owner !== owner || current.repo !== repo) {
+          setGithubRepoLink({ owner, repo });
+        }
+      }
+    } else if (githubRepoLink && currentProjectId) {
+      // Project has no repo linked, but global link exists — clear it
+      setGithubRepoLink(null);
+    }
+  }, [currentProjectId, currentProject?.githubRepo]);
+
   const handleGithubDeviceFlow = async () => {
     setDeviceFlowStatus('waiting');
     setError('');
@@ -219,6 +240,10 @@ function GitHubTab() {
   const handleLinkRepo = (repo: GitHubRepo) => {
     const [owner, name] = repo.full_name.split('/');
     setGithubRepoLink({ owner, repo: name });
+    // Also persist to project store
+    if (currentProjectId) {
+      useProjectsStore.getState().setProjectGitHubRepo(currentProjectId, repo.full_name);
+    }
     setShowRepoList(false);
     setStatusMessage(`Linked to ${repo.full_name}`);
   };
@@ -263,12 +288,16 @@ function GitHubTab() {
       const repo = await createRepo(newRepoName.trim(), newRepoDesc, newRepoPrivate);
       const user = useAuthStore.getState().githubUser;
       setGithubRepoLink({ owner: user!.login, repo: repo.name });
+      // Persist to project store
+      if (currentProjectId) {
+        useProjectsStore.getState().setProjectGitHubRepo(currentProjectId, repo.full_name);
+      }
       setShowCreateRepo(false);
       setNewRepoName('');
       setNewRepoDesc('');
       setStatusMessage(`✅ Created & linked to ${repo.full_name}`);
-      // Auto-push after create
-      setTimeout(handlePush, 1500);
+      // Auto-push after create — use 3s delay to ensure GitHub has initialized the repo
+      setTimeout(handlePush, 3000);
     } catch (e: any) {
       setStatusMessage(`❌ ${e.message}`);
     }
@@ -379,7 +408,15 @@ function GitHubTab() {
               <span className="text-white text-xs font-mono truncate">{githubRepoLink.owner}/{githubRepoLink.repo}</span>
             </div>
             <button
-              onClick={() => { setGithubRepoLink(null); setStatusMessage(''); setPushResult(null); }}
+              onClick={() => {
+                setGithubRepoLink(null);
+                // Also clear from project store
+                if (currentProjectId) {
+                  useProjectsStore.getState().setProjectGitHubRepo(currentProjectId, '');
+                }
+                setStatusMessage('');
+                setPushResult(null);
+              }}
               className="text-gray-500 hover:text-white hover:bg-white/10 p-1 rounded"
               title="Unlink"
             >

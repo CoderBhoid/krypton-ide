@@ -35,12 +35,10 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
   const currentProject = currentProjectId ? projects[currentProjectId] : null;
 
-  // Sync files to project store on changes
-  useEffect(() => {
-    if (currentProjectId && Object.keys(files).length > 0) {
-      useProjectsStore.getState().updateProjectFiles(currentProjectId, files);
-    }
-  }, [files, currentProjectId]);
+  // NOTE: Files are persisted to project store by App.tsx's saveCurrentProject()
+  // which runs on a 30s interval, on blur, visibility change, and app background.
+  // Do NOT add a useEffect here that syncs on every `files` change — it fires
+  // on every keystroke and causes massive performance issues.
 
   // Auto-open first code file when entering a project (no more empty dashboard)
   useEffect(() => {
@@ -71,7 +69,8 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
     };
     setVH();
     window.addEventListener('resize', setVH);
-    window.addEventListener('orientationchange', () => setTimeout(setVH, 100));
+    const handleOrientation = () => setTimeout(setVH, 100);
+    window.addEventListener('orientationchange', handleOrientation);
 
     // Keyboard-aware: use visualViewport to detect keyboard
     const vv = window.visualViewport;
@@ -91,11 +90,13 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
       vv.addEventListener('resize', onViewportResize);
       return () => {
         window.removeEventListener('resize', setVH);
+        window.removeEventListener('orientationchange', handleOrientation);
         vv.removeEventListener('resize', onViewportResize);
       };
     }
     return () => {
       window.removeEventListener('resize', setVH);
+      window.removeEventListener('orientationchange', handleOrientation);
     };
   }, []);
 
