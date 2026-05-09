@@ -201,15 +201,16 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
   useEffect(() => {
     const t1 = setTimeout(() => setShowContent(true), 100);
     const t2 = setTimeout(() => setShowButton(true), 500);
-    
-    try {
-      GoogleAuth.initialize({
-        clientId: GOOGLE_CLIENT_ID,
-        scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
-        grantOfflineAccess: true,
-      });
-    } catch (e) {
-      console.warn('GoogleAuth init failed', e);
+    if (!Capacitor.isNativePlatform()) {
+      try {
+        GoogleAuth.initialize({
+          clientId: GOOGLE_CLIENT_ID,
+          scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
+          grantOfflineAccess: true,
+        });
+      } catch (e) {
+        console.warn('GoogleAuth init failed', e);
+      }
     }
     
     return () => { clearTimeout(t1); clearTimeout(t2); };
