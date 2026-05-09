@@ -1,21 +1,18 @@
 import React, { useState } from 'react';
-import { FolderOpen, ArrowRight, Sparkles, FolderSearch } from 'lucide-react';
+import { FolderOpen, ArrowRight, Sparkles, FolderSearch, Edit3 } from 'lucide-react';
 import { initializeStorage, migrateFromLocalStorage } from '../../lib/fileSystemStorage';
 import { Capacitor } from '@capacitor/core';
-import { FolderPicker as NativeFolderPicker } from '../../lib/folderPickerPlugin';
 
 interface FolderPickerProps {
   onComplete: () => void;
 }
 
 export function FolderPicker({ onComplete }: FolderPickerProps) {
-  const [selectedPath, setSelectedPath] = useState('');
+  const [selectedPath, setSelectedPath] = useState('KryptonIDE');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
   const [showContent, setShowContent] = useState(false);
-
-  // Fallback folder name for web/non-native environments
-  const [webFolderName, setWebFolderName] = useState('KryptonIDE');
+  const [isEditing, setIsEditing] = useState(false);
 
   React.useEffect(() => {
     const t = setTimeout(() => setShowContent(true), 100);
@@ -24,31 +21,15 @@ export function FolderPicker({ onComplete }: FolderPickerProps) {
 
   const isNative = Capacitor.isNativePlatform();
 
-  const handleSelectFolder = async () => {
-    setError('');
-    try {
-      const result = await NativeFolderPicker.pickFolder();
-      if (result.path) {
-        setSelectedPath(result.path);
-      } else {
-        // User selected root of external storage
-        setSelectedPath('KryptonIDE');
-      }
-    } catch (e: any) {
-      // User cancelled the picker
-      if (e?.message?.includes('cancelled')) {
-        return;
-      }
-      console.error('Folder picker error:', e);
-      setError(e.message || 'Failed to select folder. Please try again.');
-    }
+  const handleSelectFolder = () => {
+    setIsEditing(true);
   };
 
   const handleContinue = async () => {
-    const folderPath = isNative ? selectedPath : webFolderName.trim();
+    const folderPath = selectedPath.trim();
 
     if (!folderPath) {
-      setError('Please select a folder first');
+      setError('Please enter a folder name');
       return;
     }
 
@@ -96,63 +77,40 @@ export function FolderPicker({ onComplete }: FolderPickerProps) {
         </p>
 
         {/* Selected Folder Preview */}
-        {isNative ? (
-          <>
-            <div className="w-full bg-gray-100 dark:bg-[#111] border border-gray-200 dark:border-white/10 rounded-2xl p-4 mb-4">
-              <div className="text-[11px] text-gray-500 dark:text-gray-500 uppercase tracking-wider font-semibold mb-2">
-                Storage Location
-              </div>
-              {selectedPath ? (
-                <div className="flex items-center space-x-2 text-sm font-mono">
-                  <span className="text-gray-400 dark:text-gray-600 truncate">/storage/emulated/0/</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">{selectedPath}</span>
-                  <span className="text-gray-400 dark:text-gray-600">/</span>
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500 dark:text-gray-500 italic">
-                  No folder selected yet
-                </div>
-              )}
-            </div>
-
-            {/* Select Folder Button */}
-            <button
-              onClick={handleSelectFolder}
-              className="w-full flex items-center justify-center space-x-2 py-3.5 rounded-2xl font-bold text-base shadow-lg active:scale-[0.97] transition-all duration-300 bg-[#111] border border-white/10 text-white hover:bg-[#1a1a1a] hover:border-emerald-500/30 mb-3"
-            >
-              <FolderSearch size={20} className="text-emerald-400" />
-              <span>{selectedPath ? 'Change Folder' : 'Select Folder'}</span>
-            </button>
-          </>
-        ) : (
-          /* Web fallback: text input for folder name */
-          <>
-            <div className="w-full bg-gray-100 dark:bg-[#111] border border-gray-200 dark:border-white/10 rounded-2xl p-4 mb-4">
-              <div className="text-[11px] text-gray-500 dark:text-gray-500 uppercase tracking-wider font-semibold mb-2">
-                Storage Path
-              </div>
-              <div className="flex items-center space-x-2 text-sm font-mono">
-                <span className="text-gray-400 dark:text-gray-600 truncate">/storage/emulated/0/</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold">{webFolderName || '...'}</span>
-                <span className="text-gray-400 dark:text-gray-600">/</span>
-              </div>
-            </div>
-
-            <div className="w-full mb-3">
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 block uppercase tracking-wider">
-                Folder Name
-              </label>
+        <div className="w-full bg-gray-100 dark:bg-[#111] border border-gray-200 dark:border-white/10 rounded-2xl p-4 mb-4">
+          <div className="text-[11px] text-gray-500 dark:text-gray-500 uppercase tracking-wider font-semibold mb-2">
+            Storage Location
+          </div>
+          {isEditing ? (
+            <div className="flex items-center space-x-2">
+              <span className="text-gray-400 dark:text-gray-600 text-sm font-mono truncate">/storage/emulated/0/</span>
               <input
                 autoFocus
-                value={webFolderName}
-                onChange={(e) => { setWebFolderName(e.target.value); setError(''); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleContinue()}
+                value={selectedPath}
+                onChange={(e) => { setSelectedPath(e.target.value); setError(''); }}
+                onBlur={() => { if (selectedPath.trim()) setIsEditing(false); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && selectedPath.trim()) setIsEditing(false); }}
                 placeholder="KryptonIDE"
-                className="w-full bg-gray-50 dark:bg-[#0a0a0a] border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3.5 text-gray-900 dark:text-white text-lg placeholder-gray-400 dark:placeholder-gray-600 focus:border-emerald-500/60 focus:outline-none focus:ring-4 focus:ring-emerald-500/15 transition-all font-semibold"
+                className="flex-1 bg-[#0a0a0a] border border-emerald-500/40 rounded-lg px-3 py-2 text-emerald-400 text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
               />
             </div>
-          </>
-        )}
+          ) : (
+            <div className="flex items-center space-x-2 text-sm font-mono">
+              <span className="text-gray-400 dark:text-gray-600 truncate">/storage/emulated/0/</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">{selectedPath || 'KryptonIDE'}</span>
+              <span className="text-gray-400 dark:text-gray-600">/</span>
+            </div>
+          )}
+        </div>
+
+        {/* Change Folder Button */}
+        <button
+          onClick={handleSelectFolder}
+          className="w-full flex items-center justify-center space-x-2 py-3.5 rounded-2xl font-bold text-base shadow-lg active:scale-[0.97] transition-all duration-300 bg-[#111] border border-white/10 text-white hover:bg-[#1a1a1a] hover:border-emerald-500/30 mb-3"
+        >
+          <Edit3 size={18} className="text-emerald-400" />
+          <span>{isEditing ? 'Editing...' : 'Change Folder Name'}</span>
+        </button>
 
         {error && (
           <p className="text-red-400 text-sm mb-3 text-center">{error}</p>
@@ -169,7 +127,7 @@ export function FolderPicker({ onComplete }: FolderPickerProps) {
         {/* Continue Button */}
         <button
           onClick={handleContinue}
-          disabled={isCreating || (isNative && !selectedPath)}
+          disabled={isCreating || !selectedPath.trim()}
           className="w-full flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-[0.97] transition-all duration-300 bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 disabled:opacity-60"
         >
           {isCreating ? (

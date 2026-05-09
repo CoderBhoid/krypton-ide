@@ -115,6 +115,17 @@ export function BottomPanel({ onClose, height, setHeight }: BottomPanelProps) {
   );
 }
 
+// ─── Build Panel (APK build via GitHub Actions) ──────────────
+function BuildPanel({ onMinimize }: { onMinimize: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-gray-400 text-sm space-y-3 px-8">
+      <Package size={32} className="opacity-30" />
+      <p className="text-center">Use the <span className="text-blue-400 font-semibold">GitHub</span> panel to trigger APK builds via GitHub Actions.</p>
+      <p className="text-[11px] text-gray-600 text-center">Go to Git Panel → Actions → Trigger Build Workflow</p>
+    </div>
+  );
+}
+
 // ─── Problems Tab Label (with badge counts) ─────────────────
 function ProblemsTabLabel({ active, onClick }: { active: boolean; onClick: () => void }) {
   const errorCount = useProblemsStore(s => s.errorCount);

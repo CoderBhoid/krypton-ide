@@ -279,9 +279,7 @@ export function TerminalPanel() {
                 // Execute each line natively if it's a multiline paste
                 term.write('\r\n');
                 if (currentLine.trim().length > 0) {
-                  commandHistory.push(currentLine);
-                  historyIndex = commandHistory.length;
-                  handleCommand(currentLine);
+                  handleEnter();
                 } else {
                   prompt();
                 }

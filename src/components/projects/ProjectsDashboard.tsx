@@ -641,7 +641,7 @@ export function ProjectsDashboard() {
                           <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/40 dark:via-white/5 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                           
                           <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${t.color} flex items-center justify-center mb-3 shadow-lg transform transition-transform group-hover:scale-110`}>
-                            {React.cloneElement(t.icon as React.ReactElement, { size: 20 })}
+                            {React.cloneElement(t.icon as React.ReactElement, { size: 20 } as any)}
                           </div>
                           <div className="text-left w-full">
                             <div className="font-bold text-white mb-1 leading-tight text-sm sm:text-base">{t.name}</div>

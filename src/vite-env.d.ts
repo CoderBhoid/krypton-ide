@@ -5,3 +5,9 @@ declare module '*.txt?raw' {
   const content: string;
   export default content;
 }
+
+// Allow any ?raw import
+declare module '*?raw' {
+  const content: string;
+  export default content;
+}

@@ -9,6 +9,7 @@ export interface NormalizedToolCall {
 export interface NormalizedMessage {
   role: 'user' | 'assistant' | 'tool' | 'system';
   content?: string;
+  name?: string;
   tool_calls?: NormalizedToolCall[];
   tool_call_id?: string;
 }
