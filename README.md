@@ -93,10 +93,7 @@ npm run cap:android
 *   **AI**: Multi-provider LLM integration (Gemini, OpenAI, Claude, Groq, Mistral, OpenRouter)
 *   **Git**: isomorphic-git + GitHub REST API
 
-## 🔑 Configuration & Auth
-For Google Sign-in to work natively on Android, ensure your Google Cloud Console has an OAuth 2.0 Web Application Client ID (used in `capacitor.config.ts`) and an Android Client ID containing your Keystore's SHA-1 fingerprint.
 
-For GitHub integration, the app uses Device Flow OAuth — no client secret is needed on the device.
 
 ---
 *Built by Sednium*
