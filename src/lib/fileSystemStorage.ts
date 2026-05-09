@@ -197,11 +197,19 @@ export async function readConfig(): Promise<KryptonConfig | null> {
 
   if (!isNative()) {
     const raw = webRead(`${base}/krypton.config.json`);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) {
+      console.error('[FS] Corrupt config (web), resetting:', e);
+      return null;
+    }
   }
 
   const raw = await readTextFile(`${base}/krypton.config.json`);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) {
+    console.error('[FS] Corrupt config file, resetting:', e);
+    return null;
+  }
 }
 
 export async function saveConfigNow(config: KryptonConfig): Promise<void> {
@@ -252,11 +260,19 @@ export async function readAuth(): Promise<any | null> {
 
   if (!isNative()) {
     const raw = webRead(`${base}/auth.json`);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) {
+      console.error('[FS] Corrupt auth (web), resetting:', e);
+      return null;
+    }
   }
 
   const raw = await readTextFile(`${base}/auth.json`);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) {
+    console.error('[FS] Corrupt auth file, resetting:', e);
+    return null;
+  }
 }
 
 export async function saveAuth(data: any): Promise<void> {
@@ -283,11 +299,19 @@ export async function readExtensions(): Promise<any | null> {
 
   if (!isNative()) {
     const raw = webRead(`${base}/extensions.json`);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) {
+      console.error('[FS] Corrupt extensions (web), resetting:', e);
+      return null;
+    }
   }
 
   const raw = await readTextFile(`${base}/extensions.json`);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) {
+    console.error('[FS] Corrupt extensions file, resetting:', e);
+    return null;
+  }
 }
 
 export async function saveExtensions(data: any): Promise<void> {
@@ -511,7 +535,11 @@ export async function readProjectFiles(projectId: string): Promise<Record<string
 
   if (!isNative()) {
     const raw = webRead(`${projectDir}/files.json`);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) {
+      console.error('[FS] Corrupt project files (web):', e);
+      return null;
+    }
   }
 
   // Try reading the internal tree structure

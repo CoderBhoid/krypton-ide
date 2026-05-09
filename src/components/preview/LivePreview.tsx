@@ -42,6 +42,14 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     f => f.type === 'file' && (f.name.endsWith('.jsx') || f.name.endsWith('.tsx'))
   );
 
+  // Also gather .js files that contain JSX syntax (e.g. Next.js page.js files)
+  const jsFilesWithJsx = Object.values(files).filter(
+    f => f.type === 'file' && f.name.endsWith('.js') && f.content && 
+    (f.content.includes('<div') || f.content.includes('<main') || f.content.includes('<h1') || f.content.includes('React.createElement') || f.content.includes('return ('))
+  );
+
+  const allReactFiles = [...jsxFiles, ...jsFilesWithJsx];
+
   // Detect Vite/Next.js projects: they have index.html with <script type="module"> which can't work in blob URLs
   const isViteOrModuleProject = useMemo(() => {
     if (!hasHtmlFile) return false;
@@ -51,10 +59,15 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     return /type=["']module["']/.test(htmlFile.content) && /src=["']\/?(src\/|\.\/src)/.test(htmlFile.content);
   }, [files, hasHtmlFile]);
 
-  const hasReactProject = ((!hasHtmlFile || isViteOrModuleProject) && jsxFiles.length > 0 && jsxFiles.some(
-    f => f.content?.includes('React') || f.content?.includes('react') || f.content?.includes('jsx') || f.content?.includes('useState')
-  ));
+  // React project = has JSX/React content AND (no HTML file OR is a Vite/module project OR is Next.js)
+  // Detect Next.js: has page.js/tsx
+  const isNextProject = useMemo(() => {
+    return Object.values(files).some(f => f.type === 'file' && (f.name === 'page.js' || f.name === 'page.tsx' || f.name === 'page.jsx'));
+  }, [files]);
 
+  const hasReactProject = ((!hasHtmlFile || isViteOrModuleProject || isNextProject) && allReactFiles.length > 0 && allReactFiles.some(
+    f => f.content?.includes('React') || f.content?.includes('react') || f.content?.includes('jsx') || f.content?.includes('useState') || f.content?.includes('export default function')
+  ));
   const isMarkdownPreview = activeFile?.type === 'file' && (activeFile.name.endsWith('.md') || activeFile.language === 'markdown');
 
   const isSvgPreview = activeFile?.type === 'file' && activeFile.name.endsWith('.svg');
@@ -66,7 +79,7 @@ export function LivePreview({ onClose }: LivePreviewProps) {
            project?.template?.startsWith('android-');
   }, [activeFile?.content, project?.template]);
 
-  const isCodeExecution = !hasHtmlFile && !hasReactProject && !isMarkdownPreview && !isSvgPreview && activeFile?.type === 'file' && activeFile.language && activeFile.language !== 'html' && activeFile.language !== 'xml' && !isAndroidCode;
+  const isCodeExecution = !hasHtmlFile && !hasReactProject && !isNextProject && !isMarkdownPreview && !isSvgPreview && activeFile?.type === 'file' && activeFile.language && activeFile.language !== 'html' && activeFile.language !== 'xml' && !isAndroidCode;
 
   // For HTML projects, build the preview
   const previewSrc = useMemo(() => {
@@ -172,12 +185,14 @@ export function LivePreview({ onClose }: LivePreviewProps) {
       .map(f => f.content)
       .join('\n');
 
-    // Find main entry (App.jsx/tsx or first jsx file)
-    const appFile = jsxFiles.find(f => f.name.toLowerCase().startsWith('app.')) || jsxFiles[0];
+    // Find main entry: App.jsx/tsx first, then page.js for Next.js, then first file
+    const appFile = allReactFiles.find(f => f.name.toLowerCase().startsWith('app.')) 
+      || allReactFiles.find(f => f.name.toLowerCase() === 'page.js' || f.name.toLowerCase() === 'page.jsx' || f.name.toLowerCase() === 'page.tsx')
+      || allReactFiles[0];
     if (!appFile?.content) return null;
 
     // Collect all component files (non-App files first, then App last)
-    const otherFiles = jsxFiles.filter(f => f.id !== appFile.id);
+    const otherFiles = allReactFiles.filter(f => f.id !== appFile.id);
     
     // Process user code: strip import/export since React/ReactDOM are UMD globals
     const processCode = (code: string) => {
@@ -186,9 +201,13 @@ export function LivePreview({ onClose }: LivePreviewProps) {
         .replace(/^\s*import\s+.*?from\s+['"]react-dom['"].*?;?\s*$/gm, '')
         .replace(/^\s*import\s+.*?from\s+['"]react-dom\/client['"].*?;?\s*$/gm, '')
         .replace(/^\s*import\s+.*?from\s+['"]react\/jsx-runtime['"].*?;?\s*$/gm, '')
+        // Strip Next.js-specific imports
+        .replace(/^\s*import\s+.*?from\s+['"]next\/.*?['"].*?;?\s*$/gm, '// (next import stripped)')
         .replace(/^\s*import\s+(\w+)\s+from\s+['"]\.\/.*?['"].*?;?\s*$/gm, '// (resolved: $1)')
         .replace(/^\s*import\s+\{([^}]+)\}\s+from\s+['"]\.\/.*?['"].*?;?\s*$/gm, '// (resolved: {$1})')
         .replace(/^\s*import\s+['"]\.\/.*?\.css['"].*?;?\s*$/gm, '// (css imported via style tag)')
+        // Strip Next.js metadata export
+        .replace(/^\s*export\s+const\s+metadata\s*=\s*\{[\s\S]*?\};?\s*$/gm, '// (metadata stripped)')
         .replace(/^\s*export\s+default\s+function\s+/gm, 'function ')
         .replace(/^\s*export\s+default\s+class\s+/gm, 'class ')
         .replace(/^\s*export\s+default\s+(\w+)\s*;?\s*$/gm, '// (default: $1)')

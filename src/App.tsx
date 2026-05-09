@@ -19,6 +19,7 @@ import {
   readConfig,
   saveConfigNow,
   writeProjectFiles,
+  type KryptonConfig,
 } from './lib/fileSystemStorage';
 
 export default function App() {
@@ -39,12 +40,20 @@ export default function App() {
       // Storage is already initialized — load all data from disk
       setStorageReady(true);
       try {
-        // Load config first
-        const config = await readConfig();
-        if (config) {
-          useIdeStore.getState().setTheme(config.theme || 'vs-dark');
-          useIdeStore.getState().setHaptics(config.haptics !== false);
+        // Load config first — self-heal if corrupt
+        let config = await readConfig();
+        if (!config) {
+          console.warn('[App] Config missing or corrupt — writing fresh defaults');
+          const freshConfig: KryptonConfig = {
+            welcomed: false, haptics: true, theme: 'vs-dark',
+            activeFont: '', installedFonts: [],
+            ai: { provider: 'openai', model: 'gpt-4o', activeSessionId: null, savedModels: [], activeModelId: undefined },
+          };
+          await saveConfigNow(freshConfig);
+          config = freshConfig;
         }
+        useIdeStore.getState().setTheme(config.theme || 'vs-dark');
+        useIdeStore.getState().setHaptics(config.haptics !== false);
 
         // Load all stores from disk in parallel
         await Promise.all([
@@ -66,12 +75,20 @@ export default function App() {
     setStorageReady(true);
     setIsLoading(true);
 
-    // Load config to check welcomed state
-    const config = await readConfig();
-    if (config) {
-      useIdeStore.getState().setTheme(config.theme || 'vs-dark');
-      useIdeStore.getState().setHaptics(config.haptics !== false);
+    // Load config to check welcomed state — self-heal if corrupt
+    let config = await readConfig();
+    if (!config) {
+      console.warn('[App] Config missing after init — writing fresh defaults');
+      const freshConfig: KryptonConfig = {
+        welcomed: false, haptics: true, theme: 'vs-dark',
+        activeFont: '', installedFonts: [],
+        ai: { provider: 'openai', model: 'gpt-4o', activeSessionId: null, savedModels: [], activeModelId: undefined },
+      };
+      await saveConfigNow(freshConfig);
+      config = freshConfig;
     }
+    useIdeStore.getState().setTheme(config.theme || 'vs-dark');
+    useIdeStore.getState().setHaptics(config.haptics !== false);
 
     // Load stores
     await Promise.all([

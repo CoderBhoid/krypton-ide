@@ -193,8 +193,18 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
   return (
     <div className="flex h-full w-full flex-col bg-white dark:bg-[#1e1e1e] overflow-hidden">
       <style>{`
-        html.keyboard-open .bottom-nav {
+        html.keyboard-open .bottom-nav,
+        .keyboard-open .bottom-nav {
           display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          max-height: 0 !important;
+          overflow: hidden !important;
+          pointer-events: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          min-height: 0 !important;
+          border: none !important;
         }
       `}</style>
       {/* Top Bar with notch (safe-area) handling on mobile */}

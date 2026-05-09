@@ -13,6 +13,110 @@ import { readConfig, saveConfigNow } from '../../lib/fileSystemStorage';
 const GOOGLE_CLIENT_ID = '228869160750-nqir9tev4919koqbcsrnhfo5puorqtqa.apps.googleusercontent.com';
 
 
+// ── Language-specific SVG icons ────────────────────────────────────
+const AndroidIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <path d="M17.523 15.341a1.003 1.003 0 0 0 0-2.006 1.003 1.003 0 0 0 0 2.006zm-11.046 0a1.003 1.003 0 0 0 0-2.006 1.003 1.003 0 0 0 0 2.006zm11.405-6.018l1.991-3.448a.414.414 0 0 0-.717-.414L17.16 8.928c-1.522-.694-3.23-1.081-5.06-1.081-1.83 0-3.538.387-5.06 1.081L5.045 5.461a.414.414 0 0 0-.717.414l1.991 3.448C3.369 11.184 1.498 14.334 1.498 18h21.004c0-3.666-1.871-6.816-4.82-8.677z" fill="#3DDC84"/>
+  </svg>
+);
+const KotlinIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <defs><linearGradient id="kt" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#E44857"/><stop offset="50%" stopColor="#C711E1"/><stop offset="100%" stopColor="#7F52FF"/></linearGradient></defs>
+    <path d="M2 22L12 12 22 22H2z" fill="url(#kt)"/><path d="M2 2h10L2 12V2z" fill="url(#kt)"/><path d="M12 2L2 12l10 10h10L12 12 22 2H12z" fill="url(#kt)"/>
+  </svg>
+);
+const ComposeIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <circle cx="12" cy="12" r="10" stroke="#4285F4" strokeWidth="1.5"/>
+    <path d="M8 12c0-2.2 1.8-4 4-4s4 1.8 4 4-1.8 4-4 4" stroke="#4285F4" strokeWidth="1.5" strokeLinecap="round"/>
+    <circle cx="12" cy="12" r="1.5" fill="#4285F4"/>
+  </svg>
+);
+const HtmlIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <path d="M4.136 3L5.918 20.162 11.99 22l6.082-1.838L19.864 3H4.136z" fill="#E44D26"/>
+    <path d="M12 4.808v15.37l4.918-1.49L18.31 4.808H12z" fill="#F16529"/>
+    <path d="M8.724 9.098L8.5 7h7l-.2 2.098H10.93l.2 2.098h5.45L16.15 17l-4.15 1.15L7.85 17l-.25-2.8h2.1l.13 1.4 2.17.58 2.17-.58.23-2.52H7.74L7.3 9.098h1.424z" fill="#fff"/>
+  </svg>
+);
+const ReactIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <circle cx="12" cy="12" r="2.1" fill="#61DAFB"/>
+    <ellipse cx="12" cy="12" rx="10" ry="4" stroke="#61DAFB" strokeWidth="1" fill="none" transform="rotate(0 12 12)"/>
+    <ellipse cx="12" cy="12" rx="10" ry="4" stroke="#61DAFB" strokeWidth="1" fill="none" transform="rotate(60 12 12)"/>
+    <ellipse cx="12" cy="12" rx="10" ry="4" stroke="#61DAFB" strokeWidth="1" fill="none" transform="rotate(120 12 12)"/>
+  </svg>
+);
+const ViteIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <defs><linearGradient id="vt1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#41D1FF"/><stop offset="100%" stopColor="#BD34FE"/></linearGradient><linearGradient id="vt2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#FFBD4F"/><stop offset="100%" stopColor="#FF9A00"/></linearGradient></defs>
+    <path d="M21.5 3.5l-9 18.5L3 3.5l9 2.5 9.5-2.5z" fill="url(#vt1)"/>
+    <path d="M15.5 2L12 13l-3-1.5L15.5 2z" fill="url(#vt2)"/>
+  </svg>
+);
+const NextIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <circle cx="12" cy="12" r="10" fill="white"/>
+    <path d="M9.5 8v8l7-4.5V8L9.5 12.5V8z" fill="black"/>
+    <line x1="16" y1="8" x2="16" y2="16" stroke="black" strokeWidth="1.5"/>
+  </svg>
+);
+const PythonIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <path d="M11.914 1c-2.724 0-5.097.459-5.097 2.593v1.9h5.186v.58H5.307C3.29 6.073 1.5 7.38 1.5 10.19c0 2.811 1.414 4.72 3.807 4.72h2.2v-2.27c0-2.163 1.873-4.07 4.407-4.07h5.172c1.932 0 3.414-1.213 3.414-3.06V2.593C20.5 1.46 18.638 1 15.914 1h-4zm-2.79 1.5a.95.95 0 1 1 0 1.9.95.95 0 0 1 0-1.9z" fill="#3776AB"/>
+    <path d="M12.086 23c2.724 0 5.097-.459 5.097-2.593v-1.9h-5.186v-.58h6.696c2.017 0 3.807-1.307 3.807-4.117 0-2.811-1.414-4.72-3.807-4.72h-2.2v2.27c0 2.163-1.873 4.07-4.407 4.07H6.914c-1.932 0-3.414 1.213-3.414 3.06v2.917C3.5 22.54 5.362 23 8.086 23h4zm2.79-1.5a.95.95 0 1 1 0-1.9.95.95 0 0 1 0 1.9z" fill="#FFD43B"/>
+  </svg>
+);
+const FastApiIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <rect x="2" y="2" width="20" height="20" rx="4" fill="#009688"/>
+    <path d="M13 6L9.5 12.5h3L11 18l5-7h-3.5L13 6z" fill="white" strokeLinejoin="round"/>
+  </svg>
+);
+const NodeIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <path d="M12 2l9 5.2v10.4L12 22l-9-4.4V7.2L12 2z" fill="#339933"/>
+    <path d="M12 7v5l4.33 2.5M12 12L7.67 9.5" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+    <text x="12" y="18" textAnchor="middle" fill="white" fontSize="5" fontWeight="bold" fontFamily="Arial">N</text>
+  </svg>
+);
+const RustIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <circle cx="12" cy="12" r="9" stroke="#CE422B" strokeWidth="1.5"/>
+    <circle cx="12" cy="12" r="3" fill="#CE422B"/>
+    <line x1="12" y1="3" x2="12" y2="6" stroke="#CE422B" strokeWidth="1.5"/><line x1="12" y1="18" x2="12" y2="21" stroke="#CE422B" strokeWidth="1.5"/>
+    <line x1="3" y1="12" x2="6" y2="12" stroke="#CE422B" strokeWidth="1.5"/><line x1="18" y1="12" x2="21" y2="12" stroke="#CE422B" strokeWidth="1.5"/>
+    <line x1="5.636" y1="5.636" x2="7.757" y2="7.757" stroke="#CE422B" strokeWidth="1.5"/><line x1="16.243" y1="16.243" x2="18.364" y2="18.364" stroke="#CE422B" strokeWidth="1.5"/>
+    <line x1="5.636" y1="18.364" x2="7.757" y2="16.243" stroke="#CE422B" strokeWidth="1.5"/><line x1="16.243" y1="7.757" x2="18.364" y2="5.636" stroke="#CE422B" strokeWidth="1.5"/>
+  </svg>
+);
+const JavaIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <path d="M8.851 18.56s-.917.534.653.714c1.902.218 2.874.187 4.969-.211 0 0 .552.346 1.321.646-4.699 2.013-10.633-.118-6.943-1.149z" fill="#E76F00"/>
+    <path d="M8.143 15.938s-1.029.762.542.924c2.032.209 3.636.227 6.413-.308 0 0 .384.389.987.602-5.679 1.661-12.007.131-7.942-.1218z" fill="#E76F00"/>
+    <path d="M13.398 11.257c1.155 1.332-.304 2.533-.304 2.533s2.939-1.52 1.59-3.418c-1.261-1.772-2.228-2.653 3.007-5.688 0 0-8.216 2.052-4.293 6.573z" fill="#E76F00"/>
+    <path d="M18.984 20.2s.679.559-.747.991c-2.712.822-11.288 1.069-13.669.033-.856-.373.75-.89 1.254-.999.527-.114.828-.093.828-.093-.953-.671-6.156 1.318-2.643 1.887 9.578 1.554 17.462-.7 14.977-1.819z" fill="#5382A1"/>
+    <path d="M9.492 13.387s-4.362 1.036-1.544 1.412c1.189.159 3.561.123 5.77-.062 1.806-.152 3.618-.477 3.618-.477s-.637.272-1.098.587c-4.429 1.165-12.986.623-10.522-.569 2.082-1.006 3.776-.891 3.776-.891z" fill="#5382A1"/>
+  </svg>
+);
+const CIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <circle cx="12" cy="12" r="10" fill="#A8B9CC"/>
+    <text x="12" y="16.5" textAnchor="middle" fill="white" fontSize="12" fontWeight="bold" fontFamily="Arial">C</text>
+  </svg>
+);
+const CppIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <circle cx="12" cy="12" r="10" fill="#00599C"/>
+    <text x="12" y="16" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="Arial">C++</text>
+  </svg>
+);
+const MarkdownIcon = ({ size = 24 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+    <rect x="1" y="4" width="22" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+    <path d="M5 15V9l3 3.5L11 9v6M15 9v6l3-3 3 3V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
 
 const templateCategories = [
   {
@@ -20,9 +124,9 @@ const templateCategories = [
     name: 'Android & Mobile',
     icon: <Smartphone size={18} />,
     templates: [
-      { id: 'android-java', name: 'Android (Java)', desc: 'Standard Android app with Java & XML', icon: <Code2 size={24} />, color: 'from-green-500 to-emerald-700' },
-      { id: 'android-kotlin', name: 'Android (Kotlin)', desc: 'Modern Android app with Kotlin', icon: <Code2 size={24} />, color: 'from-purple-500 to-indigo-700' },
-      { id: 'android-compose', name: 'Android (Compose)', desc: 'Jetpack Compose native UI', icon: <Braces size={24} />, color: 'from-blue-400 to-indigo-600' },
+      { id: 'android-java', name: 'Android (Java)', desc: 'Standard Android app with Java & XML', icon: <AndroidIcon size={24} />, color: 'from-green-500 to-emerald-700' },
+      { id: 'android-kotlin', name: 'Android (Kotlin)', desc: 'Modern Android app with Kotlin', icon: <KotlinIcon size={24} />, color: 'from-purple-500 to-indigo-700' },
+      { id: 'android-compose', name: 'Android (Compose)', desc: 'Jetpack Compose native UI', icon: <ComposeIcon size={24} />, color: 'from-blue-400 to-indigo-600' },
     ]
   },
   {
@@ -30,10 +134,10 @@ const templateCategories = [
     name: 'Web Frontend',
     icon: <MonitorPlay size={18} />,
     templates: [
-      { id: 'html-css-js', name: 'HTML / JS', desc: 'Web project with starter files', icon: <Code2 size={24} />, color: 'from-orange-500 to-rose-500' },
-      { id: 'react', name: 'React', desc: 'React app with JSX & CDN', icon: <Braces size={24} />, color: 'from-cyan-400 to-blue-500' },
-      { id: 'vite-react', name: 'Vite + React', desc: 'Modern React app with Vite', icon: <Braces size={24} />, color: 'from-indigo-500 to-purple-600' },
-      { id: 'nextjs', name: 'Next.js', desc: 'Full-stack React framework', icon: <MonitorPlay size={24} />, color: 'from-gray-700 to-black' },
+      { id: 'html-css-js', name: 'HTML / JS', desc: 'Web project with starter files', icon: <HtmlIcon size={24} />, color: 'from-orange-500 to-rose-500' },
+      { id: 'react', name: 'React', desc: 'React app with JSX & CDN', icon: <ReactIcon size={24} />, color: 'from-cyan-400 to-blue-500' },
+      { id: 'vite-react', name: 'Vite + React', desc: 'Modern React app with Vite', icon: <ViteIcon size={24} />, color: 'from-indigo-500 to-purple-600' },
+      { id: 'nextjs', name: 'Next.js', desc: 'Full-stack React framework', icon: <NextIcon size={24} />, color: 'from-gray-700 to-black' },
     ]
   },
   {
@@ -41,8 +145,8 @@ const templateCategories = [
     name: 'Backend & APIs',
     icon: <Server size={18} />,
     templates: [
-      { id: 'python-fastapi', name: 'FastAPI', desc: 'High-performance Python API', icon: <Server size={24} />, color: 'from-teal-400 to-emerald-500' },
-      { id: 'nodejs-express', name: 'Node + Express', desc: 'Express.js backend server', icon: <Server size={24} />, color: 'from-green-600 to-green-800' },
+      { id: 'python-fastapi', name: 'FastAPI', desc: 'High-performance Python API', icon: <FastApiIcon size={24} />, color: 'from-teal-400 to-emerald-500' },
+      { id: 'nodejs-express', name: 'Node + Express', desc: 'Express.js backend server', icon: <NodeIcon size={24} />, color: 'from-green-600 to-green-800' },
     ]
   },
   {
@@ -50,10 +154,12 @@ const templateCategories = [
     name: 'CLI & Scripts',
     icon: <TerminalSquare size={18} />,
     templates: [
-      { id: 'python', name: 'Python Script', desc: 'Standalone Python script', icon: <TerminalSquare size={24} />, color: 'from-yellow-400 to-amber-600' },
-      { id: 'rust-cli', name: 'Rust CLI', desc: 'Command line tool in Rust', icon: <TerminalSquare size={24} />, color: 'from-orange-600 to-red-700' },
-      { id: 'java-cli', name: 'Java Console', desc: 'Simple Java app', icon: <TerminalSquare size={24} />, color: 'from-red-500 to-orange-500' },
-      { id: 'kotlin-cli', name: 'Kotlin Console', desc: 'Simple Kotlin app', icon: <TerminalSquare size={24} />, color: 'from-purple-500 to-blue-500' },
+      { id: 'python', name: 'Python Script', desc: 'Standalone Python script', icon: <PythonIcon size={24} />, color: 'from-yellow-400 to-amber-600' },
+      { id: 'c-cli', name: 'C Program', desc: 'Standard C program', icon: <CIcon size={24} />, color: 'from-sky-400 to-sky-600' },
+      { id: 'cpp-cli', name: 'C++ Program', desc: 'Modern C++ program', icon: <CppIcon size={24} />, color: 'from-blue-500 to-blue-800' },
+      { id: 'rust-cli', name: 'Rust CLI', desc: 'Command line tool in Rust', icon: <RustIcon size={24} />, color: 'from-orange-600 to-red-700' },
+      { id: 'java-cli', name: 'Java Console', desc: 'Simple Java app', icon: <JavaIcon size={24} />, color: 'from-red-500 to-orange-500' },
+      { id: 'kotlin-cli', name: 'Kotlin Console', desc: 'Simple Kotlin app', icon: <KotlinIcon size={24} />, color: 'from-purple-500 to-blue-500' },
     ]
   },
   {
@@ -61,7 +167,7 @@ const templateCategories = [
     name: 'Blank',
     icon: <FileText size={18} />,
     templates: [
-      { id: 'markdown', name: 'Markdown', desc: 'Documentation project', icon: <FileText size={24} />, color: 'from-purple-400 to-pink-500' },
+      { id: 'markdown', name: 'Markdown', desc: 'Documentation project', icon: <MarkdownIcon size={24} />, color: 'from-purple-400 to-pink-500' },
       { id: 'blank', name: 'Blank', desc: 'Empty workspace', icon: <FolderOpen size={24} />, color: 'from-gray-400 to-gray-600' },
     ]
   }
@@ -143,12 +249,17 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
       onSkip();
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      // More robust check for common error objects or strings
-      const errorStr = typeof err === 'string' ? err : (err?.message || err?.error || JSON.stringify(err));
-      const shouldAlert = !errorStr.includes('cancelled') && !errorStr.includes('closed_by_user');
+      // Safe error serialization — JSON.stringify(err) can throw on circular/native objects
+      let errorStr = '';
+      try {
+        errorStr = typeof err === 'string' ? err : (err?.message || err?.error || String(err));
+      } catch {
+        errorStr = 'Unknown sign-in error';
+      }
+      const isCancelled = errorStr.includes('cancelled') || errorStr.includes('closed_by_user') || errorStr.includes('popup_closed') || errorStr.includes('12501');
       
-      if (shouldAlert) {
-        alert('Google sign-in failed. If you are in a web browser, please ensure the origin is authorized in Google Cloud Console.');
+      if (!isCancelled) {
+        alert('Google sign-in failed. Please try again or skip for now.');
       }
     } finally {
       setIsLoading(false);

@@ -12,6 +12,8 @@ export type ProjectTemplate =
   | 'rust-cli' 
   | 'java-cli' 
   | 'kotlin-cli'
+  | 'c-cli'
+  | 'cpp-cli'
   | 'vite-react'
   | 'nextjs'
   | 'python-fastapi'
@@ -725,6 +727,52 @@ jobs:
           language: 'kotlin',
           content: 'fun main() {\n    println("Hello Kotlin!")\n}\n'
         }
+      };
+    }
+
+    case 'c-cli': {
+      root.children = ['main_c', 'makefile_c'];
+      return {
+        root,
+        main_c: {
+          id: 'main_c',
+          name: 'main.c',
+          type: 'file',
+          parentId: 'root',
+          language: 'cpp',
+          content: '#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n// Krypton IDE - C Project\n\ntypedef struct {\n    char name[50];\n    int age;\n} Person;\n\nvoid greet(const Person *p) {\n    printf("Hello, %s! You are %d years old.\\n", p->name, p->age);\n}\n\nint main(int argc, char *argv[]) {\n    printf("=== Krypton IDE - C Program ===\\n\\n");\n\n    Person dev = {"Developer", 25};\n    greet(&dev);\n\n    // Dynamic memory example\n    int n = 5;\n    int *arr = (int *)malloc(n * sizeof(int));\n    if (!arr) {\n        fprintf(stderr, "Memory allocation failed!\\n");\n        return 1;\n    }\n\n    for (int i = 0; i < n; i++) {\n        arr[i] = (i + 1) * (i + 1);\n    }\n\n    printf("\\nSquares: ");\n    for (int i = 0; i < n; i++) {\n        printf("%d ", arr[i]);\n    }\n    printf("\\n");\n\n    free(arr);\n    return 0;\n}\n',
+        },
+        makefile_c: {
+          id: 'makefile_c',
+          name: 'Makefile',
+          type: 'file',
+          parentId: 'root',
+          language: 'makefile',
+          content: 'CC = gcc\nCFLAGS = -Wall -Wextra -std=c11\nTARGET = main\n\nall: $(TARGET)\n\n$(TARGET): main.c\n\t$(CC) $(CFLAGS) -o $(TARGET) main.c\n\nclean:\n\trm -f $(TARGET)\n\nrun: $(TARGET)\n\t./$(TARGET)\n\n.PHONY: all clean run\n',
+        },
+      };
+    }
+
+    case 'cpp-cli': {
+      root.children = ['main_cpp', 'makefile_cpp'];
+      return {
+        root,
+        main_cpp: {
+          id: 'main_cpp',
+          name: 'main.cpp',
+          type: 'file',
+          parentId: 'root',
+          language: 'cpp',
+          content: '#include <iostream>\n#include <vector>\n#include <string>\n#include <algorithm>\n#include <memory>\n\n// Krypton IDE - Modern C++ Project\n\nclass Animal {\npublic:\n    virtual ~Animal() = default;\n    virtual std::string speak() const = 0;\n    virtual std::string name() const = 0;\n};\n\nclass Dog : public Animal {\npublic:\n    std::string speak() const override { return "Woof!"; }\n    std::string name() const override { return "Dog"; }\n};\n\nclass Cat : public Animal {\npublic:\n    std::string speak() const override { return "Meow!"; }\n    std::string name() const override { return "Cat"; }\n};\n\nvoid demo_smart_pointers() {\n    std::vector<std::unique_ptr<Animal>> animals;\n    animals.push_back(std::make_unique<Dog>());\n    animals.push_back(std::make_unique<Cat>());\n\n    std::cout << "\\n--- Animal Sounds ---\\n";\n    for (const auto& animal : animals) {\n        std::cout << animal->name() << " says: " << animal->speak() << "\\n";\n    }\n}\n\nvoid demo_algorithms() {\n    std::vector<int> numbers = {5, 2, 8, 1, 9, 3, 7, 4, 6};\n\n    std::sort(numbers.begin(), numbers.end());\n\n    std::cout << "\\n--- Sorted Numbers ---\\n";\n    for (int n : numbers) {\n        std::cout << n << " ";\n    }\n    std::cout << "\\n";\n\n    auto it = std::find(numbers.begin(), numbers.end(), 5);\n    if (it != numbers.end()) {\n        std::cout << "Found 5 at index: " << std::distance(numbers.begin(), it) << "\\n";\n    }\n}\n\nint main() {\n    std::cout << "=== Krypton IDE - C++ Program ===\\n";\n\n    demo_smart_pointers();\n    demo_algorithms();\n\n    return 0;\n}\n',
+        },
+        makefile_cpp: {
+          id: 'makefile_cpp',
+          name: 'Makefile',
+          type: 'file',
+          parentId: 'root',
+          language: 'makefile',
+          content: 'CXX = g++\nCXXFLAGS = -Wall -Wextra -std=c++17\nTARGET = main\n\nall: $(TARGET)\n\n$(TARGET): main.cpp\n\t$(CXX) $(CXXFLAGS) -o $(TARGET) main.cpp\n\nclean:\n\trm -f $(TARGET)\n\nrun: $(TARGET)\n\t./$(TARGET)\n\n.PHONY: all clean run\n',
+        },
       };
     }
 

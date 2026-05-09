@@ -65,8 +65,25 @@ async function readRawContent(path: string): Promise<string> {
   return typeof result.data === 'string' ? result.data : '';
 }
 
-/** Internal: write content to disk */
+/** Internal: write content to disk, auto-creating parent directories */
 async function writeContent(path: string, content: string): Promise<void> {
+  // Ensure parent directories exist on disk
+  const lastSlash = path.lastIndexOf('/');
+  if (lastSlash > 0) {
+    const parentDir = path.substring(0, lastSlash);
+    try {
+      await Filesystem.mkdir({
+        path: parentDir,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+    } catch (e: any) {
+      // Directory already exists — safe to ignore
+      if (!e.message?.includes('exists')) {
+        console.warn('[FS] mkdir warning:', e.message);
+      }
+    }
+  }
   await Filesystem.writeFile({
     path,
     data: content,
@@ -203,13 +220,42 @@ export async function CapacitorFilesystemWrite(path: string, content: string): P
     await writeContent(path, content);
 
     const state = useIdeStore.getState();
-    const fileName = path.split('/').pop() || path;
-    const existingId = Object.entries(state.files).find(([_, f]) => f.name === fileName)?.[0];
+    const segments = path.split('/').filter(Boolean);
+    const fileName = segments.pop()!;
     
-    if (existingId) {
-      state.updateFileContent(existingId, content);
+    // Walk/create folder hierarchy in the IDE store
+    let currentParentId: string = 'root';
+    for (const folderName of segments) {
+      // Check if this folder already exists under currentParentId
+      const parentNode = state.files[currentParentId];
+      const existingFolderId = parentNode?.children?.find(cid => {
+        const child = state.files[cid];
+        return child && child.name === folderName && child.type === 'folder';
+      });
+
+      if (existingFolderId) {
+        currentParentId = existingFolderId;
+      } else {
+        // Create the intermediate folder in the store
+        const newFolderId = state.createFile(folderName, currentParentId, 'folder');
+        currentParentId = newFolderId;
+        // Re-read state after mutation
+        const freshState = useIdeStore.getState();
+        Object.assign(state, { files: freshState.files });
+      }
+    }
+
+    // Now create or update the file under the correct parent
+    const parentNode = useIdeStore.getState().files[currentParentId];
+    const existingFileId = parentNode?.children?.find(cid => {
+      const child = useIdeStore.getState().files[cid];
+      return child && child.name === fileName && child.type === 'file';
+    });
+
+    if (existingFileId) {
+      useIdeStore.getState().updateFileContent(existingFileId, content);
     } else {
-      state.createFile(fileName, 'root', 'file', content);
+      useIdeStore.getState().createFile(fileName, currentParentId, 'file', content);
     }
   } catch (error: any) {
     throw new Error(`Could not write file at ${path}: ${error.message}`);

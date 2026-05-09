@@ -14,8 +14,9 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         registerPlugin(ApkInstallerPlugin.class);
         registerPlugin(BackgroundModePlugin.class);
+        registerPlugin(FolderPickerPlugin.class);
         
-        // Trigger the professional permission flow
+        // Request all-files-access so projects live in user-visible /storage/emulated/0/
         checkStoragePermission();
     }
 

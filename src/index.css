@@ -261,8 +261,20 @@ body {
   transition: height 0.15s ease-out;
 }
 
-.keyboard-open .bottom-nav {
+/* AGGRESSIVE: hide bottom nav when keyboard is open — multiple fallbacks
+   because some Android WebViews ignore `display:none` */
+.keyboard-open .bottom-nav,
+html.keyboard-open .bottom-nav {
   display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  border: none !important;
 }
 
 /* Context menu improvements */

@@ -686,7 +686,7 @@ export function AiAssistant() {
                 ? 'bg-blue-600 text-white rounded-br-none shadow-lg shadow-blue-900/20' 
                 : msg.role === 'tool'
                   ? 'bg-transparent w-full px-0 py-0'
-                  : 'bg-[#2d2d2d] text-gray-200 border border-white/5 rounded-bl-none w-full shadow-xl'
+                  : 'bg-[#2d2d2d] text-gray-200 border border-blue-500/15 rounded-bl-none w-full shadow-xl shadow-blue-500/[0.03]'
             }`}>
               {msg.role !== 'user' ? (
                 <>

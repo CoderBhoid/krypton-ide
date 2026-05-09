@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronRight, ChevronDown, File, Folder, FileJson, FileCode2, FileText, Plus, FolderPlus, Trash2, Edit2, Search, Upload, Download, X, Copy, Share2, Save, Clipboard, FolderDown, MoreVertical, ChevronsDownUp, ChevronsUpDown, Info } from 'lucide-react';
+import { ChevronRight, ChevronDown, File, Folder, FileJson, FileCode2, FileText, Plus, FolderPlus, Trash2, Edit2, Search, Upload, Download, X, Copy, Share2, Save, Clipboard, FolderDown, MoreVertical, ChevronsDownUp, ChevronsUpDown, Info, FolderOpen, FileUp } from 'lucide-react';
 import { useIdeStore, FileNode } from '../../store/useIdeStore';
 import { cn } from '../../lib/utils';
 import { Share } from '@capacitor/share';
@@ -53,6 +53,11 @@ export function FileExplorer() {
   const [renameValue, setRenameValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeFileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── File clipboard (whole-file copy/paste) ───────────
+  const [copiedFileId, setCopiedFileId] = useState<string | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, nodeId: '' });
@@ -281,6 +286,22 @@ export function FileExplorer() {
     window.dispatchEvent(new CustomEvent('krypton-send-to-agent', { detail: { text: `@${node.name} ` } }));
   };
 
+  const handleCopyFile = (nodeId: string) => {
+    setCopiedFileId(nodeId);
+    // Brief haptic feedback
+    if ('vibrate' in navigator) navigator.vibrate(20);
+  };
+
+  const handlePasteFile = (targetFolderId: string) => {
+    if (!copiedFileId) return;
+    const srcNode = files[copiedFileId];
+    if (!srcNode || srcNode.type !== 'file') return;
+    const newId = createFile(srcNode.name, targetFolderId, 'file', srcNode.content || '');
+    openFile(newId);
+    setExpandedFolders(prev => new Set(prev).add(targetFolderId));
+    setCopiedFileId(null);
+  };
+
   const getContextMenuItems = (nodeId: string): ContextMenuItem[] => {
     const node = files[nodeId];
     if (!node) return [];
@@ -300,6 +321,7 @@ export function FileExplorer() {
     if (isFile) {
       items.push({ label: 'Save', icon: <Save size={14} />, onClick: () => saveFile(nodeId) });
       items.push({ label: 'Copy Content', icon: <Clipboard size={14} />, onClick: () => copyContent(nodeId) });
+      items.push({ label: 'Copy File', icon: <Copy size={14} />, onClick: () => handleCopyFile(nodeId) });
       items.push({ label: 'Duplicate', icon: <Copy size={14} />, onClick: () => duplicateFile(nodeId) });
       items.push({ label: 'Download', icon: <Download size={14} />, onClick: () => downloadFile(nodeId) });
     }
@@ -307,6 +329,9 @@ export function FileExplorer() {
     if (!isFile) {
       items.push({ label: 'New File', icon: <Plus size={14} />, onClick: () => { const name = prompt('File name:'); if (name) { const id = createFile(name, nodeId, 'file'); openFile(id); setExpandedFolders(new Set(expandedFolders).add(nodeId)); } } });
       items.push({ label: 'New Folder', icon: <FolderPlus size={14} />, onClick: () => { const name = prompt('Folder name:'); if (name) { createFile(name, nodeId, 'folder'); setExpandedFolders(new Set(expandedFolders).add(nodeId)); } } });
+      if (copiedFileId && files[copiedFileId]) {
+        items.push({ label: `Paste "${files[copiedFileId].name}"`, icon: <Clipboard size={14} />, onClick: () => handlePasteFile(nodeId) });
+      }
       items.push({ label: 'Download as ZIP', icon: <FolderDown size={14} />, onClick: () => downloadFolder(nodeId) });
     }
 
@@ -377,6 +402,87 @@ export function FileExplorer() {
       reader.readAsText(file);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // ─── Open File from native file manager ─────────────────
+  const handleOpenFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles) return;
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      // Read as text for code files, skip binary files that are too large
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`File "${file.name}" is too large (max 10MB for editing).`);
+        continue;
+      }
+      try {
+        const content = await file.text();
+        const id = createFile(file.name, 'root', 'file', content);
+        if (i === 0) openFile(id);
+      } catch {
+        // Try reading as binary/base64 for non-text files
+        const reader = new FileReader();
+        reader.onload = () => {
+          const content = reader.result as string;
+          const id = createFile(file.name, 'root', 'file', content);
+          if (i === 0) openFile(id);
+        };
+        reader.readAsText(file);
+      }
+    }
+    if (nativeFileInputRef.current) nativeFileInputRef.current.value = '';
+  };
+
+  // ─── Open Folder from native file manager ───────────────
+  const handleOpenFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    // Build folder structure from webkitRelativePath
+    const folderMap = new Map<string, string>(); // path -> nodeId
+
+    // Detect the root folder name from the first file's relative path
+    const firstPath = (selectedFiles[0] as any).webkitRelativePath || selectedFiles[0].name;
+    const rootFolderName = firstPath.split('/')[0] || 'Imported';
+
+    // Create root folder for the import
+    const rootFolderId = createFile(rootFolderName, 'root', 'folder');
+    folderMap.set(rootFolderName, rootFolderId);
+    setExpandedFolders(prev => new Set(prev).add(rootFolderId));
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      const relativePath = (file as any).webkitRelativePath || file.name;
+      const parts = relativePath.split('/');
+
+      // Skip node_modules and hidden dirs
+      if (parts.some((p: string) => p === 'node_modules' || p === '.git' || p.startsWith('.'))) continue;
+      // Skip huge files
+      if (file.size > 5 * 1024 * 1024) continue;
+
+      // Create intermediate folders
+      let parentId = rootFolderId;
+      for (let j = 1; j < parts.length - 1; j++) {
+        const folderPath = parts.slice(0, j + 1).join('/');
+        if (!folderMap.has(folderPath)) {
+          const folderId = createFile(parts[j], parentId, 'folder');
+          folderMap.set(folderPath, folderId);
+          setExpandedFolders(prev => new Set(prev).add(folderId));
+          parentId = folderId;
+        } else {
+          parentId = folderMap.get(folderPath)!;
+        }
+      }
+
+      // Read and create the file
+      try {
+        const content = await file.text();
+        const fileId = createFile(parts[parts.length - 1], parentId, 'file', content);
+        if (i === 0) openFile(fileId);
+      } catch { /* skip unreadable files */ }
+    }
+
+    if (folderInputRef.current) folderInputRef.current.value = '';
   };
 
   const handleDownloadZip = async () => {
@@ -458,6 +564,10 @@ export function FileExplorer() {
                 getFileIcon(node.name)
               )}
             </span>
+            {/* Show clipboard indicator if this file is copied */}
+            {copiedFileId === nodeId && (
+              <span className="mr-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1 rounded">COPIED</span>
+            )}
             
             {isRenaming ? (
               <input
@@ -573,10 +683,31 @@ export function FileExplorer() {
             <ChevronsDownUp size={14} />
           </button>
         </div>
+
+        {/* Open File / Open Folder row */}
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={() => nativeFileInputRef.current?.click()}
+            className="flex-1 flex items-center justify-center space-x-1 bg-blue-600/10 hover:bg-blue-600/20 active:bg-blue-600/30 border border-blue-500/20 py-1.5 rounded text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            <FileUp size={12} />
+            <span>Open File</span>
+          </button>
+          <button
+            onClick={() => folderInputRef.current?.click()}
+            className="flex-1 flex items-center justify-center space-x-1 bg-emerald-600/10 hover:bg-emerald-600/20 active:bg-emerald-600/30 border border-emerald-500/20 py-1.5 rounded text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors"
+          >
+            <FolderOpen size={12} />
+            <span>Open Folder</span>
+          </button>
+        </div>
       </div>
 
-      {/* Hidden file input */}
+      {/* Hidden file inputs */}
       <input type="file" ref={fileInputRef} className="hidden" multiple accept="*/*" onChange={handleUploadFiles} />
+      <input type="file" ref={nativeFileInputRef} className="hidden" multiple accept="*/*" onChange={handleOpenFile} />
+      {/* @ts-ignore — webkitdirectory is a non-standard but widely-supported attribute */}
+      <input type="file" ref={folderInputRef} className="hidden" onChange={handleOpenFolder} {...{ webkitdirectory: '', directory: '' } as any} />
 
       {/* File tree */}
       <div className="py-1 flex-1 overflow-y-auto">
