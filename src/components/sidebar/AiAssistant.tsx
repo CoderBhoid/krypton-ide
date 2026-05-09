@@ -710,7 +710,22 @@ export function AiAssistant() {
                   })()}
                 </>
               ) : (
-                <div className="whitespace-pre-wrap font-sans text-[13.5px] leading-relaxed break-words">{msg.content}</div>
+                <div className="flex flex-col space-y-2">
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-1">
+                      {msg.attachments.map((att: any, idx: number) => (
+                        att.type.startsWith('image/') ? (
+                          <img key={idx} src={att.data} alt={att.name} className="w-48 max-w-full rounded-xl object-contain border border-white/20" />
+                        ) : (
+                          <div key={idx} className="flex items-center space-x-2 bg-white/10 px-3 py-1.5 rounded-xl border border-white/20">
+                            <span className="text-[11px] font-mono">{att.name}</span>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  )}
+                  <div className="whitespace-pre-wrap font-sans text-[13.5px] leading-relaxed break-words">{msg.content}</div>
+                </div>
               )}
             </div>
           </div>
