@@ -1,5 +1,12 @@
+<div align="center">
+
+<img src="icon4.png" alt="Krypton IDE Logo" width="140"/>
+
 # Krypton IDE v3.0
 
+> The next-generation mobile & web development environment built for coding anywhere.
+
+</div>
 > The next-generation mobile & web development environment built for coding anywhere.
 
 Krypton IDE brings the power of a desktop-class development workflow directly to your phone, tablet, or browser.  
@@ -7,7 +14,7 @@ Built with performance, flexibility, and AI-first development in mind, Krypton a
 
 With native-like performance, offline execution, real filesystem access, GitHub integration, and a deeply integrated AI assistant, Krypton transforms mobile development into a serious productivity experience.
 
-<img src="icon.png" alt="Krypton IDE Logo" width="140"/>
+
 
 ---
 
