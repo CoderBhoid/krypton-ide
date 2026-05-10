@@ -1,8 +1,8 @@
 # Krypton IDE v3.0
 
 Krypton IDE is a hyper-modern, fully native mobile & web development environment built for seamless productivity anywhere. It brings the power of desktop IDEs into your pocket, featuring offline execution, agentic AI assistance, and seamless cloud synchronization.
+<img src"icon.png">
 
-icon.png
 
 ## 🔥 What's New in v3.0
 
