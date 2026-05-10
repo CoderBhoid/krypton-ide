@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, RefreshCw, ExternalLink, Loader2, CheckCircle2, XCircle, Terminal as TerminalIcon, Package } from 'lucide-react';
+import { X, RefreshCw, ExternalLink, Loader2, CheckCircle2, XCircle, Terminal as TerminalIcon, Package, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import { executeCode, canExecuteLanguage } from '../../lib/codeRunner';
@@ -15,6 +15,8 @@ export function LivePreview({ onClose }: LivePreviewProps) {
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<{ type: string; args: string }[]>([]);
+  const [showInternetWarning, setShowInternetWarning] = useState(false);
+  const [internetWarningAccepted, setInternetWarningAccepted] = useState(false);
   
   const project = currentProjectId ? projects[currentProjectId] : null;
 
@@ -68,6 +70,48 @@ export function LivePreview({ onClose }: LivePreviewProps) {
   const hasReactProject = ((!hasHtmlFile || isViteOrModuleProject || isNextProject) && allReactFiles.length > 0 && allReactFiles.some(
     f => f.content?.includes('React') || f.content?.includes('react') || f.content?.includes('jsx') || f.content?.includes('useState') || f.content?.includes('export default function')
   ));
+
+  // Detect package.json and parse dependencies for importmap generation
+  const packageJsonDeps = useMemo(() => {
+    const pkgFile = Object.values(files).find(
+      f => f.type === 'file' && f.name === 'package.json'
+    );
+    if (!pkgFile?.content) return null;
+
+    try {
+      const pkg = JSON.parse(pkgFile.content);
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      // Filter out non-CDN-resolvable deps (local paths, workspaces)
+      const filtered: Record<string, string> = {};
+      for (const [name, version] of Object.entries(deps)) {
+        if (typeof version === 'string' && !version.startsWith('file:') && !version.startsWith('link:') && !version.startsWith('workspace:')) {
+          filtered[name] = version as string;
+        }
+      }
+      return Object.keys(filtered).length > 0 ? filtered : null;
+    } catch {
+      return null;
+    }
+  }, [files]);
+
+  // Build esm.sh importmap from package.json dependencies
+  const importMapScript = useMemo(() => {
+    if (!packageJsonDeps) return '';
+
+    const imports: Record<string, string> = {};
+    for (const [name, version] of Object.entries(packageJsonDeps)) {
+      // Clean version string (remove ^, ~, >= etc.)
+      const cleanVer = (version as string).replace(/^[\^~>=<]+/, '');
+      imports[name] = `https://esm.sh/${name}@${cleanVer}`;
+      // Also add subpath imports (e.g., react-dom/client)
+      imports[`${name}/`] = `https://esm.sh/${name}@${cleanVer}/`;
+    }
+
+    return `<script type="importmap">\n${JSON.stringify({ imports }, null, 2)}\n<\/script>`;
+  }, [packageJsonDeps]);
+
+  const hasCdnDependencies = !!packageJsonDeps && Object.keys(packageJsonDeps).length > 0;
+
   const isMarkdownPreview = activeFile?.type === 'file' && (activeFile.name.endsWith('.md') || activeFile.language === 'markdown');
 
   const isSvgPreview = activeFile?.type === 'file' && activeFile.name.endsWith('.svg');
@@ -143,9 +187,14 @@ export function LivePreview({ onClose }: LivePreviewProps) {
 </script>`;
     html = html.replace('</head>', consoleCapture + '\n</head>');
 
+    // Inject importmap for CDN dependencies if package.json exists
+    if (importMapScript) {
+      html = html.replace('<head>', '<head>\n' + importMapScript);
+    }
+
     const blob = new Blob([html], { type: 'text/html' });
     return URL.createObjectURL(blob);
-  }, [files, hasHtmlFile]);
+  }, [files, hasHtmlFile, importMapScript]);
 
   // For code execution, run on mount
   useEffect(() => {
@@ -242,13 +291,18 @@ export function LivePreview({ onClose }: LivePreviewProps) {
       return 'window.__SVG_' + varName + ' = `' + svgContent + '`;';
     }).join('\n');
 
+    // If we have package.json deps, use specific React versions from esm.sh
+    const reactVersion = packageJsonDeps?.['react']?.replace(/^[\^~>=<]+/, '') || '18';
+    const reactDomVersion = packageJsonDeps?.['react-dom']?.replace(/^[\^~>=<]+/, '') || reactVersion;
+
     const html = '<!DOCTYPE html>\n<html>\n<head>\n' +
       '  <meta charset="UTF-8">\n' +
       '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
       '  <style>\n    * { margin: 0; padding: 0; box-sizing: border-box; }\n    body { font-family: system-ui, -apple-system, sans-serif; }\n    ' + allCss + '\n  </style>\n' +
-      '  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin><\/script>\n' +
-      '  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin><\/script>\n' +
+      '  <script src="https://unpkg.com/react@' + reactVersion + '/umd/react.development.js" crossorigin><\/script>\n' +
+      '  <script src="https://unpkg.com/react-dom@' + reactDomVersion + '/umd/react-dom.development.js" crossorigin><\/script>\n' +
       '  <script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>\n' +
+      (importMapScript ? '  ' + importMapScript + '\n' : '') +
       '</head>\n<body>\n  <div id="root"></div>\n\n' +
       '  <script>\n' +
       '    var { useState, useEffect, useRef, useCallback, useMemo, useReducer, useContext, createContext, Fragment } = React;\n' +
@@ -264,13 +318,15 @@ export function LivePreview({ onClose }: LivePreviewProps) {
       '    // === ' + appFile.name + ' (entry) ===\n' +
       '    ' + processedAppCode + '\n\n' +
       '    try {\n' +
-      '      const _root = ReactDOM.createRoot(document.getElementById("root"));\n' +
-      '      if (typeof ' + mainComponent + ' !== "undefined") {\n' +
+      '      var _rootEl = document.getElementById("root");\n' +
+      '      if (!_rootEl._reactRoot) { _rootEl._reactRoot = ReactDOM.createRoot(_rootEl); }\n' +
+      '      var _root = _rootEl._reactRoot;\n' +
+      '      if (typeof ' + mainComponent + ' === "function" || typeof ' + mainComponent + ' === "object") {\n' +
       '        _root.render(React.createElement(' + mainComponent + '));\n' +
-      '      } else if (typeof App !== "undefined") {\n' +
+      '      } else if (typeof App === "function" || typeof App === "object") {\n' +
       '        _root.render(React.createElement(App));\n' +
       '      } else {\n' +
-      '        document.getElementById("root").innerHTML = \'<div style="padding:40px;text-align:center;color:#888;"><h3>No component found</h3><p style="margin-top:8px;font-size:14px;">Define a function App() in your code.</p></div>\';\n' +
+      '        _rootEl.innerHTML = \'<div style="padding:40px;text-align:center;color:#888;"><h3>No component found</h3><p style="margin-top:8px;font-size:14px;">Define a function App() in your code.</p></div>\';\n' +
       '      }\n' +
       '    } catch(err) {\n' +
       '      document.getElementById("root").innerHTML = \'<div style="padding:20px;color:#ff6b6b;font-family:monospace;white-space:pre-wrap;background:#1a1a2e;min-height:100vh;"><h3>Mount Error</h3>\' + err.message + \'</div>\';\n' +
@@ -280,7 +336,7 @@ export function LivePreview({ onClose }: LivePreviewProps) {
 
     const blob = new Blob([html], { type: 'text/html' });
     return URL.createObjectURL(blob);
-  }, [files, hasReactProject, refreshKey]);
+  }, [files, hasReactProject, refreshKey, importMapScript, packageJsonDeps]);
 
   // Build Markdown preview 
   const markdownPreviewSrc = useMemo(() => {
@@ -324,6 +380,64 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     const blob = new Blob([html], { type: 'text/html' });
     return URL.createObjectURL(blob);
   }, [isMarkdownPreview, activeFile?.content, refreshKey]);
+
+  // ─── Internet Warning Dialog ───
+  if (hasCdnDependencies && !internetWarningAccepted && (hasReactProject || hasHtmlFile)) {
+    if (!showInternetWarning) {
+      // Auto-show the warning
+      return (
+        <div className="fixed inset-0 z-50 bg-[#0d1117] flex flex-col animate-fade-in">
+          <PreviewHeader onClose={onClose} onRefresh={handleRefresh} isCodeMode={false} fileName="Preview" />
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="max-w-md w-full bg-[#161b22] border border-amber-500/30 rounded-3xl p-8 text-center shadow-2xl shadow-amber-500/10">
+              <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-amber-500/20">
+                <Wifi size={40} className="text-amber-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-3">Internet Required</h3>
+              <p className="text-gray-400 mb-4 leading-relaxed text-sm">
+                This project has a <code className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">package.json</code> with 
+                <span className="text-amber-400 font-semibold"> {Object.keys(packageJsonDeps!).length} dependencies</span> that 
+                will be loaded from the internet via <span className="text-emerald-400 font-mono text-xs">esm.sh</span> CDN.
+              </p>
+              <div className="bg-black/30 rounded-xl p-3 mb-6 border border-[#30363d] text-left">
+                <div className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-2">Dependencies</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(packageJsonDeps!).slice(0, 12).map(([name, ver]) => (
+                    <span key={name} className="text-[10px] font-mono px-2 py-1 bg-blue-500/10 text-blue-300 rounded-md border border-blue-500/20">
+                      {name}@{(ver as string).replace(/^[\^~>=<]+/, '')}
+                    </span>
+                  ))}
+                  {Object.keys(packageJsonDeps!).length > 12 && (
+                    <span className="text-[10px] text-gray-500 px-2 py-1">+{Object.keys(packageJsonDeps!).length - 12} more</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-500/5 border border-amber-500/20 rounded-xl mb-6">
+                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                <p className="text-[11px] text-amber-300/80 text-left">
+                  Preview won't work without an active internet connection. First load may be slow.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={onClose}
+                  className="flex-1 bg-[#21262d] hover:bg-[#30363d] text-gray-300 py-3 rounded-xl font-semibold transition-all text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => setInternetWarningAccepted(true)}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/30 active:scale-95 text-sm"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
 
   // ─── React Project Preview ───
   if (hasReactProject && reactPreviewSrc) {

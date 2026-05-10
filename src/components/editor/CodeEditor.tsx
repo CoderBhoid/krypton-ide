@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Editor, { useMonaco } from '@monaco-editor/react';
 import { useIdeStore } from '../../store/useIdeStore';
-import { X, Keyboard, FileCode2, Zap, Eye, Code2, Paintbrush, Scissors, Copy, ClipboardPaste, Bot, Undo2, Redo2, Search } from 'lucide-react';
+import { X, Keyboard, FileCode2, Zap, Eye, Code2, Paintbrush, ClipboardPaste, Undo2, Redo2, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MarkdownPreview } from './MarkdownPreview';
 import { formatCode } from '../../lib/formatter';
@@ -20,9 +20,7 @@ export function CodeEditor() {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [closingTab, setClosingTab] = useState<string | null>(null);
 
-  // Selection floating toolbar state
-  const [selectionMenu, setSelectionMenu] = useState<{ visible: boolean; top: number; left: number; text: string } | null>(null);
-  const [selectionBounds, setSelectionBounds] = useState<{ start: { top: number; left: number }, end: { top: number; left: number } } | null>(null);
+
   const editorRef = useRef<any>(null);
 
   // Auto-save every 30 seconds
@@ -217,17 +215,7 @@ export function CodeEditor() {
     }, 50); // 50ms debounce — imperceptible, prevents OOM
   }, [activeFileId, updateFileContent]);
 
-  // Ref to store cleanup function for touch listeners added in handleEditorMount
-  const touchCleanupRef = useRef<(() => void) | null>(null);
 
-  // Bug fix: clean up touch listeners on unmount to prevent listener stacking
-  useEffect(() => {
-    return () => {
-      if (touchCleanupRef.current) {
-        touchCleanupRef.current();
-      }
-    };
-  }, []);
 
   const handleEditorMount = useCallback((editor: any, monacoApi: any) => {
     setEditorInstance(editor);
@@ -239,162 +227,7 @@ export function CodeEditor() {
       });
     });
 
-    // Custom text selection toolbar logic for mobile
-    editor.onDidChangeCursorSelection((e: any) => {
-      try {
-        const selection = e.selection;
-        if (!selection.isEmpty()) {
-          const model = editor.getModel();
-          if (!model) return;
-          const text = model.getValueInRange(selection);
-          const startPos = editor.getScrolledVisiblePosition(selection.getStartPosition());
-          const endPos = editor.getScrolledVisiblePosition(selection.getEndPosition());
-          const domNode = editor.getDomNode();
-          
-          if (startPos && endPos && domNode) {
-            const rect = domNode.getBoundingClientRect();
-            const isBelow = startPos.top < 60;
-            
-            setSelectionMenu({
-              visible: true,
-              text,
-              top: isBelow ? rect.top + startPos.top + 30 : rect.top + startPos.top - 50,
-              left: Math.min(Math.max(10, rect.left + startPos.left - 80), window.innerWidth - 250)
-            });
 
-            setSelectionBounds({
-              start: { top: rect.top + startPos.top, left: rect.left + startPos.left },
-              end: { top: rect.top + endPos.top + 18, left: rect.left + endPos.left }
-            });
-          }
-        } else {
-          setSelectionMenu(prev => (prev && prev.text === '') ? prev : null);
-          setSelectionBounds(null);
-        }
-      } catch (err: any) {
-        if (err?.type !== 'cancelation') console.error('Selection update error:', err);
-      }
-    });
-
-    // Handle deselection on click outside
-    const handleGlobalTouch = (e: any) => {
-      if (!editorRef.current) return;
-      const target = e.target as HTMLElement;
-      if (target.closest('.selection-handle') || target.closest('.selection-menu')) return;
-      
-      // If it's a quick tap (not a scroll), clear selection
-      const pos = editorRef.current.getPosition();
-      if (pos) {
-        editorRef.current.setSelection({
-          startLineNumber: pos.lineNumber,
-          startColumn: pos.column,
-          endLineNumber: pos.lineNumber,
-          endColumn: pos.column
-        });
-      }
-    };
-
-    // Mobile: Long-press to select word
-    let touchTimer: any = null;
-    let startX = 0;
-    let startY = 0;
-    const MOVE_THRESHOLD = 15; // Allow 15px of drift for mobile stability
-    
-    const editorDom = editor.getDomNode();
-    // Store named references so we can remove them on cleanup
-    const onTouchStart = (e: any) => {
-        if (e.touches.length !== 1) return;
-        const touch = e.touches[0];
-        startX = touch.clientX;
-        startY = touch.clientY;
-        
-        touchTimer = setTimeout(() => {
-          try {
-            const target = editor.getTargetAtClientPoint(touch.clientX, touch.clientY);
-            if (target && target.position) {
-              const model = editor.getModel();
-              if (!model) return;
-              const word = model.getWordAtPosition(target.position);
-              if (word) {
-                editor.setSelection({
-                  startLineNumber: target.position.lineNumber,
-                  startColumn: word.startColumn,
-                  endLineNumber: target.position.lineNumber,
-                  endColumn: word.endColumn
-                });
-                if (Capacitor.isNativePlatform()) {
-                  Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
-                }
-              } else {
-                // Even if no word, still place cursor and show menu for global actions (paste/select all)
-                editor.setPosition(target.position);
-                const pos = editor.getScrolledVisiblePosition(target.position);
-                const domNode = editor.getDomNode();
-                if (pos && domNode) {
-                   const rect = domNode.getBoundingClientRect();
-                   const isBelow = pos.top < 60;
-                   setSelectionMenu({
-                     visible: true,
-                     text: '',
-                     top: isBelow ? rect.top + pos.top + 30 : rect.top + pos.top - 50,
-                     left: Math.min(Math.max(10, rect.left + pos.left - 80), window.innerWidth - 250)
-                   });
-                }
-                if (Capacitor.isNativePlatform()) {
-                  Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
-                }
-              }
-            }
-          } catch (err: any) {
-            if (err?.type !== 'cancelation') console.error('Long press error:', err);
-          }
-        }, 500);
-    };
-    const onTouchEnd = () => {
-        if (touchTimer) clearTimeout(touchTimer);
-    };
-    const onTouchMove = (e: any) => {
-        if (!e.touches[0]) return;
-        const moveX = Math.abs(e.touches[0].clientX - startX);
-        const moveY = Math.abs(e.touches[0].clientY - startY);
-        // Only clear if movement exceeds threshold
-        if (moveX > MOVE_THRESHOLD || moveY > MOVE_THRESHOLD) {
-          if (touchTimer) clearTimeout(touchTimer);
-        }
-    };
-
-    if (editorDom) {
-      editorDom.addEventListener('touchstart', onTouchStart, { passive: true });
-      editorDom.addEventListener('touchend', onTouchEnd, { passive: true });
-      editorDom.addEventListener('touchmove', onTouchMove, { passive: true });
-    }
-
-    // Attach global deselection listener
-    const container = editor.getDomNode()?.parentElement;
-    let onContainerTouchStart: any, onContainerTouchMove: any, onContainerTouchEnd: any;
-    if (container) {
-      let isScrolling = false;
-      onContainerTouchStart = () => { isScrolling = false; };
-      onContainerTouchMove = () => { isScrolling = true; };
-      onContainerTouchEnd = (e: any) => { if (!isScrolling) handleGlobalTouch(e); };
-      container.addEventListener('touchstart', onContainerTouchStart, { passive: true });
-      container.addEventListener('touchmove', onContainerTouchMove, { passive: true });
-      container.addEventListener('touchend', onContainerTouchEnd, { passive: true });
-    }
-
-    // Store cleanup function so we can remove all touch listeners on unmount
-    touchCleanupRef.current = () => {
-      if (editorDom) {
-        editorDom.removeEventListener('touchstart', onTouchStart);
-        editorDom.removeEventListener('touchend', onTouchEnd);
-        editorDom.removeEventListener('touchmove', onTouchMove);
-      }
-      if (container) {
-        container.removeEventListener('touchstart', onContainerTouchStart);
-        container.removeEventListener('touchmove', onContainerTouchMove);
-        container.removeEventListener('touchend', onContainerTouchEnd);
-      }
-    };
 
     // Configure Advanced IntelliSense for React/TSX
     monacoApi.languages.typescript.typescriptDefaults.setCompilerOptions({
@@ -457,83 +290,7 @@ export function CodeEditor() {
     }
   };
 
-  const handleHandleDrag = (e: React.TouchEvent, side: 'start' | 'end') => {
-    try {
-      const touch = e.touches[0];
-      const editor = editorRef.current;
-      if (!editor) return;
 
-      const target = editor.getTargetAtClientPoint(touch.clientX, touch.clientY);
-      if (target && target.position) {
-        const selection = editor.getSelection();
-        if (!selection) return;
-
-        if (side === 'start') {
-          editor.setSelection({
-            startLineNumber: target.position.lineNumber,
-            startColumn: target.position.column,
-            endLineNumber: selection.endLineNumber,
-            endColumn: selection.endColumn
-          });
-        } else {
-          editor.setSelection({
-            startLineNumber: selection.startLineNumber,
-            startColumn: selection.startColumn,
-            endLineNumber: target.position.lineNumber,
-            endColumn: target.position.column
-          });
-        }
-        
-        // Auto-scroll logic when dragging near boundaries
-        const domNode = editor.getDomNode();
-        if (domNode) {
-          const rect = domNode.getBoundingClientRect();
-          const scrollSpeed = 15;
-          if (touch.clientY < rect.top + 60) {
-            editor.setScrollTop(editor.getScrollTop() - scrollSpeed);
-          } else if (touch.clientY > rect.bottom - 60) {
-            editor.setScrollTop(editor.getScrollTop() + scrollSpeed);
-          }
-        }
-      }
-    } catch (err: any) {
-      if (err?.type !== 'cancelation') console.error('Drag selection error:', err);
-    }
-  };
-
-  const handleSelectionAction = async (action: string) => {
-    if (!editorRef.current || !selectionMenu) return;
-    const editorInstance = editorRef.current;
-    
-    if (action === 'cut') {
-      const text = selectionMenu.text;
-      await navigator.clipboard.writeText(text);
-      editorInstance.executeEdits('clipboard', [{
-        range: editorInstance.getSelection(),
-        text: '',
-        forceMoveMarkers: true
-      }]);
-      setSelectionMenu(null);
-    } else if (action === 'copy') {
-      await navigator.clipboard.writeText(selectionMenu.text);
-      setSelectionMenu(null);
-    } else if (action === 'paste') {
-      const text = await navigator.clipboard.readText();
-      editorInstance.trigger('keyboard', 'paste', { text });
-      setSelectionMenu(null);
-    } else if (action === 'selectAll') {
-      editorInstance.setSelection(editorInstance.getModel().getFullModelRange());
-    } else if (action === 'ai') {
-      window.dispatchEvent(new CustomEvent('krypton-send-to-agent', { 
-        detail: { text: `Explain or modify this code:\n\`\`\`\n${selectionMenu.text}\n\`\`\`\n` } 
-      }));
-      setSelectionMenu(null);
-      useIdeStore.getState().setSidebarView('ai');
-      if (!useIdeStore.getState().isSidebarOpen) {
-        useIdeStore.getState().toggleSidebar();
-      }
-    }
-  };
 
   const keys = ['Tab', '{', '}', '[', ']', '(', ')', '<', '>', '=', ';', '"', "'", '/', ':', '!', '&', '|', '#'];
 
@@ -826,64 +583,7 @@ export function CodeEditor() {
               </>
             )}
             
-            {/* Selection Handles */}
-            {selectionBounds && (
-              <>
-                {/* Start Handle */}
-                <div 
-                  className="selection-handle fixed z-[55] w-0.5 bg-blue-500 flex flex-col items-center pointer-events-auto shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-                  style={{
-                    top: `${selectionBounds.start.top - 18}px`,
-                    left: `${selectionBounds.start.left}px`,
-                    height: '22px'
-                  }}
-                  onTouchMove={(e) => handleHandleDrag(e, 'start')}
-                >
-                  <div className="w-3.5 h-3.5 bg-blue-500 rounded-full -mt-1 shadow-lg active:scale-125 transition-transform" />
-                </div>
-                {/* End Handle */}
-                <div 
-                  className="selection-handle fixed z-[55] w-0.5 bg-blue-500 flex flex-col items-center pointer-events-auto shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-                  style={{
-                    top: `${selectionBounds.end.top - 4}px`,
-                    left: `${selectionBounds.end.left}px`,
-                    height: '22px'
-                  }}
-                  onTouchMove={(e) => handleHandleDrag(e, 'end')}
-                >
-                  <div className="w-3.5 h-3.5 bg-blue-500 rounded-full mt-auto shadow-lg active:scale-125 transition-transform" />
-                </div>
-              </>
-            )}
 
-            {/* Floating Selection Toolbar */}
-            {selectionMenu && selectionMenu.visible && (
-              <div 
-                className="fixed z-[60] flex items-center bg-[#252526] border border-[#3c3c3c] rounded-2xl shadow-2xl overflow-hidden animate-context-pop pointer-events-auto"
-                style={{
-                  top: `${Math.max(50, selectionMenu.top)}px`,
-                  left: `${selectionMenu.left}px`
-                }}
-              >
-                <div className="flex h-10 items-center divide-x divide-[#3c3c3c]">
-                  <button onClick={() => handleSelectionAction('cut')} className="flex items-center space-x-1.5 px-3 h-full hover:bg-white/10 text-[11px] font-bold text-gray-300 hover:text-white transition-colors">
-                    <Scissors size={14} /> <span>Cut</span>
-                  </button>
-                  <button onClick={() => handleSelectionAction('copy')} className="flex items-center space-x-1.5 px-3 h-full hover:bg-white/10 text-[11px] font-bold text-gray-300 hover:text-white transition-colors">
-                    <Copy size={14} /> <span>Copy</span>
-                  </button>
-                  <button onClick={() => handleSelectionAction('paste')} className="flex items-center space-x-1.5 px-3 h-full hover:bg-white/10 text-[11px] font-bold text-gray-300 hover:text-white transition-colors">
-                    <ClipboardPaste size={14} /> <span>Paste</span>
-                  </button>
-                  <button onClick={() => handleSelectionAction('selectAll')} className="flex items-center space-x-1.5 px-3 h-full hover:bg-white/10 text-[11px] font-bold text-gray-300 hover:text-white transition-colors uppercase tracking-tighter">
-                    <span>Select All</span>
-                  </button>
-                  <button onClick={() => handleSelectionAction('ai')} className="flex items-center space-x-1.5 px-4 h-full bg-[#32204c] text-purple-400 hover:text-purple-300 text-[11px] font-bold transition-colors">
-                    <Bot size={14} /> <span>Larry</span>
-                  </button>
-                </div>
-              </div>
-            )}
           </>
         ) : (
           /* Empty state — project auto-opens first file, this is just fallback */

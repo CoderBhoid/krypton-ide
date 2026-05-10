@@ -223,6 +223,7 @@ export function AiAssistant() {
       .map(([id]) => `  - ${buildPathForNode(id)}`)
       .join('\n');
 
+
     // Include active file context if one is open
     const activeFile = useIdeStore.getState().activeFileId;
     let activeFileContext = '';
@@ -231,7 +232,12 @@ export function AiAssistant() {
       const afPath = buildPathForNode(activeFile);
       activeFileContext = `\n<active_file path="${afPath}" language="${af.language || 'text'}" />\n`;
     }
-    const systemContext = SYSTEM_INSTRUCTION + `\n<project_file_tree>\n${fileTreeItems}\n</project_file_tree>\n` + activeFileContext + contextString;
+
+    // Build project context so AI knows which project & directory it's working in
+    const projectName = files['root']?.name || 'Untitled Project';
+    const projectContext = `\n<project_context>\nProject Name: ${projectName}\nWorking Directory: ${projectName}/\nAll file paths are relative to the project root ("${projectName}/").\nWhen using read_file or edit tools, use paths relative to the project root (e.g., "src/App.tsx").\n</project_context>\n`;
+
+    const systemContext = SYSTEM_INSTRUCTION + projectContext + `\n<project_file_tree>\n${fileTreeItems}\n</project_file_tree>\n` + activeFileContext + contextString;
 
     const currentInput = input;
     const currentAttachments = [...attachments];

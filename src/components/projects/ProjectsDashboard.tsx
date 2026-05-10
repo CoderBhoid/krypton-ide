@@ -202,6 +202,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
     const t1 = setTimeout(() => setShowContent(true), 100);
     const t2 = setTimeout(() => setShowButton(true), 500);
     if (!Capacitor.isNativePlatform()) {
+      // Google Sign-In SDK produces iframe CSP/CORS errors on localhost — expected.
       try {
         GoogleAuth.initialize({
           clientId: GOOGLE_CLIENT_ID,
@@ -209,7 +210,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
           grantOfflineAccess: true,
         });
       } catch (e) {
-        console.warn('GoogleAuth init failed', e);
+        // Silently ignore — expected on localhost
       }
     }
     
@@ -260,7 +261,7 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
       const isCancelled = errorStr.includes('cancelled') || errorStr.includes('closed_by_user') || errorStr.includes('popup_closed') || errorStr.includes('12501');
       
       if (!isCancelled) {
-        alert('Google sign-in failed. Please try again or skip for now.');
+        alert(`Google sign-in failed: ${errorStr}\n\nPlease check your internet connection and try again, or skip for now.`);
       }
     } finally {
       setIsLoading(false);

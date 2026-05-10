@@ -329,7 +329,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
         {isSidebarOpen && (
           <>
             <div className="md:hidden fixed inset-0 bg-black/60 z-40 animate-fade-in" onClick={toggleSidebar} />
-            <div className="fixed md:static inset-y-0 left-0 z-50 w-[85%] max-w-[300px] border-r shadow-2xl md:shadow-none animate-slide-right md:animate-none flex flex-col flex-shrink-0" style={{ background: 'var(--ide-sidebar, #252526)', borderColor: 'var(--ide-border, #1a1a1a)' }}>
+            <div className="fixed md:static inset-y-0 left-0 z-50 w-[85%] max-w-[300px] border-r shadow-2xl md:shadow-none animate-slide-right md:animate-none flex flex-col flex-shrink-0" style={{ background: 'var(--ide-sidebar, #252526)', borderColor: 'var(--ide-border, #1a1a1a)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
               <Sidebar />
             </div>
           </>

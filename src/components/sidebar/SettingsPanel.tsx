@@ -92,7 +92,7 @@ export function SettingsPanel() {
           grantOfflineAccess: true,
         });
       } catch (e) {
-        console.warn('GoogleAuth init failed on web:', e);
+        // Expected on localhost — Google SDK iframe CSP errors
       }
     }
 
@@ -150,19 +150,38 @@ export function SettingsPanel() {
       const response = await GoogleAuth.signIn();
       const givenName = response.givenName || '';
       const familyName = response.familyName || '';
-      const accessToken = response.authentication?.accessToken || '';
+      let accessToken = response.authentication?.accessToken || '';
       const user = {
         name: response.name || `${givenName} ${familyName}`.trim() || response.email,
         email: response.email,
         picture: response.imageUrl || '',
       };
+
+      // On some Android builds, signIn gives an ID token but no accessToken.
+      // Immediately try refresh() to get a valid Drive access token.
+      if (!accessToken) {
+        try {
+          const refreshResult = await GoogleAuth.refresh();
+          if (refreshResult?.accessToken) {
+            accessToken = refreshResult.accessToken;
+          }
+        } catch (refreshErr) {
+          console.warn('[Auth] Post-signIn refresh failed:', refreshErr);
+        }
+      }
+
       setGoogleAuth(user, accessToken);
+      if (accessToken) {
+        setDriveAccessToken(accessToken);
+      }
       const config = await readConfig();
       if (config) { config.welcomed = true; await saveConfigNow(config); }
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      if (err?.error !== 'popup_closed_by_user' && err?.message !== 'user_cancelled') {
-        alert('Google sign-in failed. Please try again.');
+      const errorStr = typeof err === 'string' ? err : (err?.message || err?.error || String(err));
+      const isCancelled = errorStr.includes('cancelled') || errorStr.includes('closed_by_user') || errorStr.includes('popup_closed') || errorStr.includes('12501');
+      if (!isCancelled) {
+        alert(`Google sign-in failed: ${errorStr}`);
       }
     } finally {
       setIsGoogleLoading(false);
@@ -295,6 +314,13 @@ export function SettingsPanel() {
 
   // GitHub Device Flow login
   const handleGithubDeviceFlow = async () => {
+    // Device Flow uses direct HTTP to GitHub which is blocked by CORS on web.
+    // On web, show a user-friendly message to use PAT instead.
+    if (!Capacitor.isNativePlatform()) {
+      setDeviceFlowStatus('error');
+      setConnectError('GitHub login is only available on mobile. Use a Personal Access Token on web.');
+      return;
+    }
     setDeviceFlowStatus('waiting');
     setConnectError('');
     try {
@@ -609,7 +635,13 @@ export function SettingsPanel() {
 
           {googleUser ? (
             <div className="flex items-center space-x-3">
-              <img src={googleUser.picture} alt="" className="w-8 h-8 rounded-full border border-[#3c3c3c]" />
+              {googleUser.picture ? (
+                <img src={googleUser.picture} alt="" className="w-8 h-8 rounded-full border border-[#3c3c3c]" />
+              ) : (
+                <div className="w-8 h-8 rounded-full border border-[#3c3c3c] bg-[#333] flex items-center justify-center text-white text-xs font-bold">
+                  {googleUser.name?.charAt(0)?.toUpperCase() || 'G'}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-white text-xs font-semibold truncate">{googleUser.name}</p>
                 <p className="text-gray-500 text-[11px] truncate">{googleUser.email}</p>

@@ -7,6 +7,21 @@
 
 * {
   -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Re-enable native Android text selection inside the code editor */
+.monaco-editor,
+.monaco-editor * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+/* Also allow selection in input fields and textareas */
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 :root {

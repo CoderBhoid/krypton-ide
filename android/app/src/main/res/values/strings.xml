@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">Krypton IDE</string>
     <string name="title_activity_main">Krypton IDE</string>
-    <string name="package_name">com.sednium.krypton</string>
-    <string name="custom_url_scheme">com.sednium.krypton</string>
+    <string name="package_name">com.sednium.kryptonide</string>
+    <string name="custom_url_scheme">com.sednium.kryptonide</string>
     <string name="server_client_id">228869160750-fdpk4fr81gge00ioocrdgnq28apprrj2.apps.googleusercontent.com</string>
     <string name="default_web_client_id">228869160750-fdpk4fr81gge00ioocrdgnq28apprrj2.apps.googleusercontent.com</string>
 </resources>
