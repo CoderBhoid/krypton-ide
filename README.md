@@ -2,7 +2,7 @@
 
 Krypton IDE is a hyper-modern, fully native mobile & web development environment built for seamless productivity anywhere. It brings the power of desktop IDEs into your pocket, featuring offline execution, agentic AI assistance, and seamless cloud synchronization.
 
-![Krypton IDE](https://via.placeholder.com/1200x600?text=Krypton+IDE+v3.0)
+icon.png
 
 ## 🔥 What's New in v3.0
 
@@ -96,4 +96,4 @@ npm run cap:android
 
 
 ---
-*Built by Sednium*
+*Built by Sednium and Bhoid with ❤️*
