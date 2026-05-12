@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, RefreshCw, ExternalLink, Loader2, CheckCircle2, XCircle, Terminal as TerminalIcon, Package, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { X, RefreshCw, ExternalLink, Loader2, CheckCircle2, XCircle, Terminal as TerminalIcon, Package, Wifi, WifiOff, AlertTriangle, TerminalSquare, ChevronDown, ChevronUp } from 'lucide-react';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import { executeCode, canExecuteLanguage } from '../../lib/codeRunner';
@@ -17,6 +17,8 @@ export function LivePreview({ onClose }: LivePreviewProps) {
   const [consoleLogs, setConsoleLogs] = useState<{ type: string; args: string }[]>([]);
   const [showInternetWarning, setShowInternetWarning] = useState(false);
   const [internetWarningAccepted, setInternetWarningAccepted] = useState(false);
+  const [showConsole, setShowConsole] = useState(false);
+  const [unreadLogs, setUnreadLogs] = useState(0);
   
   const project = currentProjectId ? projects[currentProjectId] : null;
 
@@ -25,6 +27,7 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     const handler = (e: MessageEvent) => {
       if (e.data?.type === 'krypton-console') {
         setConsoleLogs(prev => [...prev.slice(-200), { type: e.data.level, args: e.data.args }]);
+        setUnreadLogs(prev => prev + 1);
         // Also dispatch to bottom panel terminal
         window.dispatchEvent(new CustomEvent('krypton-console-log', { detail: e.data }));
       }
@@ -32,6 +35,10 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, []);
+
+  useEffect(() => {
+    if (showConsole) setUnreadLogs(0);
+  }, [showConsole]);
 
   const activeFile = activeFileId ? files[activeFileId] : null;
 
@@ -443,8 +450,8 @@ export function LivePreview({ onClose }: LivePreviewProps) {
   if (hasReactProject && reactPreviewSrc) {
     return (
       <div className="fixed inset-0 z-50 bg-black flex flex-col animate-fade-in">
-        <PreviewHeader onClose={onClose} onRefresh={handleRefresh} isCodeMode={false} fileName="React App" previewUrl={reactPreviewSrc} />
-        <div className="flex-1 bg-white">
+        <PreviewHeader onClose={onClose} onRefresh={handleRefresh} isCodeMode={false} fileName="React App" previewUrl={reactPreviewSrc} showConsole={showConsole} onToggleConsole={() => setShowConsole(!showConsole)} unreadLogs={unreadLogs} />
+        <div className="flex-1 bg-white relative">
           <iframe
             key={refreshKey}
             src={reactPreviewSrc}
@@ -452,6 +459,7 @@ export function LivePreview({ onClose }: LivePreviewProps) {
             sandbox="allow-scripts allow-modals allow-forms"
             className="w-full h-full border-none"
           />
+          <ConsoleOverlay logs={consoleLogs} isOpen={showConsole} />
         </div>
       </div>
     );
@@ -462,7 +470,7 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     return (
       <div className="fixed inset-0 z-50 bg-[#0d1117] flex flex-col animate-fade-in">
         <PreviewHeader onClose={onClose} onRefresh={handleRefresh} isCodeMode={false} fileName={activeFile?.name} previewUrl={markdownPreviewSrc} />
-        <div className="flex-1">
+        <div className="flex-1 relative">
           <iframe
             key={refreshKey}
             src={markdownPreviewSrc}
@@ -483,7 +491,7 @@ export function LivePreview({ onClose }: LivePreviewProps) {
     return (
       <div className="fixed inset-0 z-50 bg-[#0d1117] flex flex-col animate-fade-in">
         <PreviewHeader onClose={onClose} onRefresh={handleRefresh} isCodeMode={false} fileName={activeFile.name} previewUrl={svgUrl} />
-        <div className="flex-1">
+        <div className="flex-1 relative">
           <iframe
             key={refreshKey}
             src={svgUrl}
@@ -667,8 +675,8 @@ export function LivePreview({ onClose }: LivePreviewProps) {
   // HTML Preview View
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col animate-fade-in">
-      <PreviewHeader onClose={onClose} onRefresh={handleRefresh} isCodeMode={false} previewUrl={previewSrc} />
-      <div className="flex-1 bg-white">
+      <PreviewHeader onClose={onClose} onRefresh={handleRefresh} isCodeMode={false} previewUrl={previewSrc} showConsole={showConsole} onToggleConsole={() => setShowConsole(!showConsole)} unreadLogs={unreadLogs} />
+      <div className="flex-1 bg-white relative">
         {previewSrc ? (
           <iframe
             key={refreshKey}
@@ -682,18 +690,22 @@ export function LivePreview({ onClose }: LivePreviewProps) {
             <p className="text-gray-500">Could not build preview</p>
           </div>
         )}
+        <ConsoleOverlay logs={consoleLogs} isOpen={showConsole} />
       </div>
     </div>
   );
 }
 
-function PreviewHeader({ onClose, onRefresh, isCodeMode, fileName, language, previewUrl }: { 
+function PreviewHeader({ onClose, onRefresh, isCodeMode, fileName, language, previewUrl, showConsole, onToggleConsole, unreadLogs }: { 
   onClose: () => void; 
   onRefresh: () => void; 
   isCodeMode: boolean;
   fileName?: string;
   language?: string;
   previewUrl?: string | null;
+  showConsole?: boolean;
+  onToggleConsole?: () => void;
+  unreadLogs?: number;
 }) {
 
   const handleOpenInBrowser = () => {
@@ -718,6 +730,22 @@ function PreviewHeader({ onClose, onRefresh, isCodeMode, fileName, language, pre
         )}
       </div>
       <div className="flex items-center space-x-1">
+        {onToggleConsole && (
+          <button 
+            onClick={onToggleConsole}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-colors relative ${showConsole ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/10 hover:text-white'}`}
+            title="Toggle Console"
+          >
+            <TerminalSquare size={16} />
+            <span className="text-xs font-semibold">Console</span>
+            {unreadLogs !== undefined && unreadLogs > 0 && !showConsole && (
+              <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
+                {unreadLogs > 99 ? '99+' : unreadLogs}
+              </span>
+            )}
+            {showConsole ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+        )}
         {previewUrl && (
           <button 
             onClick={handleOpenInBrowser}
@@ -747,4 +775,41 @@ function PreviewHeader({ onClose, onRefresh, isCodeMode, fileName, language, pre
 
 function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function ConsoleOverlay({ logs, isOpen }: { logs: { type: string, args: string }[], isOpen: boolean }) {
+  const endRef = React.useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    if (isOpen) {
+      endRef.current?.scrollIntoView();
+    }
+  }, [logs, isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-[40vh] bg-[#1e1e1e]/95 backdrop-blur-md border-t border-[#3c3c3c] shadow-2xl z-20 flex flex-col animate-overlay-up">
+      <div className="flex-1 overflow-y-auto p-2 font-mono text-[11px] md:text-xs">
+        {logs.map((log, i) => (
+          <div key={i} className={`px-2 py-1.5 mb-1 rounded border-l-2 ${
+            log.type === 'error' ? 'bg-red-500/10 text-red-400 border-red-500' : 
+            log.type === 'warn' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500' : 
+            log.type === 'info' ? 'bg-blue-500/10 text-blue-400 border-blue-500' :
+            'text-gray-300 border-gray-600 hover:bg-white/5'
+          }`}>
+            <span className="opacity-50 mr-2 shrink-0">[{log.type}]</span>
+            <span className="whitespace-pre-wrap break-all">{log.args}</span>
+          </div>
+        ))}
+        {logs.length === 0 && (
+          <div className="text-gray-500 text-center py-8 italic flex flex-col items-center">
+            <TerminalSquare size={32} className="mb-2 opacity-20" />
+            <span>Console is empty</span>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+    </div>
+  );
 }

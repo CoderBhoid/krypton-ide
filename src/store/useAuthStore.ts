@@ -44,7 +44,7 @@ function persistAuth(state: AuthState) {
     githubUser: state.githubUser,
     githubRepoLink: state.githubRepoLink,
     googleUser: state.googleUser,
-    // Note: accessToken is NOT persisted — it's session-only and refreshed via GoogleAuth.refresh()
+    // Note: accessToken is NOT persisted — it's session-only and needs to be refreshed on app start if needed
   });
 }
 

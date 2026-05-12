@@ -1,12 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Download, Upload, Moon, Sun, Monitor, Trash2, Info, Github, User, LogOut, ExternalLink, Loader, CloudUpload, CloudDownload, Type, Maximize, ChevronDown, RefreshCw, CheckCircle, Copy, Check } from 'lucide-react';
+import { FolderDown, FolderUp, Moon, Sun, Monitor, Trash2, Info, Github, User, LogOut, ExternalLink, Loader, CloudUpload, CloudDownload, Type, Maximize, ChevronDown, RefreshCw, CheckCircle, Copy, Check } from 'lucide-react';
 import { startDeviceFlow, type DeviceFlowSession } from '../../lib/githubOAuth';
 import { useIdeStore } from '../../store/useIdeStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useProjectsStore } from '../../store/useProjectsStore';
 import JSZip from 'jszip';
 import { Capacitor } from '@capacitor/core';
-import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import {
   readConfig,
   saveConfigNow,
@@ -73,29 +73,12 @@ export function SettingsPanel() {
       style.textContent = `@font-face { font-family: '${fontName}'; src: url('${fontData}'); }`;
       document.head.appendChild(style);
 
-      // Apply to Monaco editors
-      setTimeout(() => {
-        document.querySelectorAll('.monaco-editor').forEach(el => {
-          (el as HTMLElement).style.fontFamily = `'${fontName}', 'JetBrains Mono', monospace`;
-        });
-      }, 100);
+      document.documentElement.style.setProperty('--krypton-font', `'${fontName}', 'Inter', ui-sans-serif, system-ui, sans-serif`);
     }
   }
 
-  // Initialize GoogleAuth for web fallback if needed
+  // Initialize Firebase is not strictly needed for Capacitor plugin manually here
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) {
-      try {
-        GoogleAuth.initialize({
-          clientId: '228869160750-fdpk4fr81gge00ioocrdgnq28apprrj2.apps.googleusercontent.com',
-          scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
-          grantOfflineAccess: true,
-        });
-      } catch (e) {
-        // Expected on localhost — Google SDK iframe CSP errors
-      }
-    }
-
     // If user is already signed in, try to refresh the access token
     if (googleUser && Capacitor.isNativePlatform()) {
       refreshGoogleToken();
@@ -107,12 +90,14 @@ export function SettingsPanel() {
 
   const refreshGoogleToken = async () => {
     try {
-      const result = await GoogleAuth.refresh();
-      if (result?.accessToken) {
-        setDriveAccessToken(result.accessToken);
+      // FirebaseAuthentication doesn't have a direct refresh() that gives an OAuth access token,
+      // but calling signInWithGoogle() silently refreshes the token in the background.
+      const result = await FirebaseAuthentication.signInWithGoogle({ scopes: ['https://www.googleapis.com/auth/drive.appdata'] } as any);
+      if (result?.credential?.accessToken) {
+        setDriveAccessToken(result.credential.accessToken);
         useAuthStore.getState().setGoogleAuth(
           googleUser!,
-          result.accessToken
+          result.credential.accessToken
         );
       }
     } catch (e) {
@@ -147,28 +132,14 @@ export function SettingsPanel() {
         return;
       }
 
-      const response = await GoogleAuth.signIn();
-      const givenName = response.givenName || '';
-      const familyName = response.familyName || '';
-      let accessToken = response.authentication?.accessToken || '';
+      const response = await FirebaseAuthentication.signInWithGoogle({ scopes: ['https://www.googleapis.com/auth/drive.appdata'] } as any);
       const user = {
-        name: response.name || `${givenName} ${familyName}`.trim() || response.email,
-        email: response.email,
-        picture: response.imageUrl || '',
+        name: response.user?.displayName || response.user?.email || 'Google User',
+        email: response.user?.email || '',
+        picture: response.user?.photoUrl || '',
       };
-
-      // On some Android builds, signIn gives an ID token but no accessToken.
-      // Immediately try refresh() to get a valid Drive access token.
-      if (!accessToken) {
-        try {
-          const refreshResult = await GoogleAuth.refresh();
-          if (refreshResult?.accessToken) {
-            accessToken = refreshResult.accessToken;
-          }
-        } catch (refreshErr) {
-          console.warn('[Auth] Post-signIn refresh failed:', refreshErr);
-        }
-      }
+      
+      const accessToken = response.credential?.accessToken || '';
 
       setGoogleAuth(user, accessToken);
       if (accessToken) {
@@ -464,6 +435,7 @@ export function SettingsPanel() {
       await loadFontIntoDOM(fontName);
 
       setActiveFont(fontName);
+      useIdeStore.getState().setActiveFont(fontName);
       setInstalledFonts(prev => [...new Set([...prev, fontName])]);
     };
     reader.readAsDataURL(file);
@@ -477,15 +449,15 @@ export function SettingsPanel() {
     if (fontName === '') {
       // Reset to default
       setActiveFont('');
-      document.querySelectorAll('.monaco-editor').forEach(el => {
-        (el as HTMLElement).style.fontFamily = '';
-      });
+      useIdeStore.getState().setActiveFont('');
+      document.documentElement.style.removeProperty('--krypton-font');
       const config = await readConfig();
       if (config) { config.activeFont = ''; await saveConfigNow(config); }
       return;
     }
 
     setActiveFont(fontName);
+    useIdeStore.getState().setActiveFont(fontName);
     await loadFontIntoDOM(fontName);
     const config = await readConfig();
     if (config) { config.activeFont = fontName; await saveConfigNow(config); }
@@ -506,9 +478,8 @@ export function SettingsPanel() {
 
     if (activeFont === fontName) {
       setActiveFont('');
-      document.querySelectorAll('.monaco-editor').forEach(el => {
-        (el as HTMLElement).style.fontFamily = '';
-      });
+      useIdeStore.getState().setActiveFont('');
+      document.documentElement.style.removeProperty('--krypton-font');
     }
   };
 
@@ -682,7 +653,7 @@ export function SettingsPanel() {
             onClick={handleExportZip}
             className="w-full flex items-center justify-center space-x-2 bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] py-2.5 rounded-lg transition-colors"
           >
-            <Download size={16} />
+            <FolderDown size={16} />
             <span>Export as .zip</span>
           </button>
           
@@ -690,7 +661,7 @@ export function SettingsPanel() {
             onClick={() => fileInputRef.current?.click()}
             className="w-full flex items-center justify-center space-x-2 bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] py-2.5 rounded-lg transition-colors"
           >
-            <Upload size={16} />
+            <FolderUp size={16} />
             <span>Import .zip</span>
           </button>
           <input 
@@ -938,7 +909,7 @@ export function SettingsPanel() {
       <div className="border-t border-[#3c3c3c] pt-4 space-y-3">
         <div className="flex items-center space-x-2 text-gray-500 text-xs">
           <Info size={12} />
-          <span>Krypton IDE v2.5 • Mobile Code Editor</span>
+          <span>Krypton IDE v3.0 • Mobile Code Editor</span>
         </div>
         <div className="text-xs text-gray-400 p-3 bg-gray-100 dark:bg-[#2d2d2d] rounded-lg border border-gray-200 dark:border-[#3c3c3c]">
           <p className="mb-2">

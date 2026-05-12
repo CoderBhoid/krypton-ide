@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "868874217528",
+    "project_id": "krypton-ide-915df",
+    "storage_bucket": "krypton-ide-915df.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:868874217528:android:b2c8b4137688b6b39adecd",
+        "android_client_info": {
+          "package_name": "com.sednium.kryptonide"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDiMTbZPv-CtDqJYwNijMJZya9Y3m7ubwU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

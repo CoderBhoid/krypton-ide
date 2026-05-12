@@ -24,6 +24,7 @@ interface IdeState {
   sidebarView: 'explorer' | 'search' | 'git' | 'ai' | 'extensions' | 'settings';
   isSidebarOpen: boolean;
   theme: 'vs-dark' | 'light' | 'hc-black';
+  activeFont: string;
   cursorPosition: CursorPosition;
   isPreviewOpen: boolean;
   isCommandPaletteOpen: boolean;
@@ -47,6 +48,7 @@ interface IdeState {
   setSidebarView: (view: 'explorer' | 'search' | 'git' | 'ai' | 'extensions' | 'settings') => void;
   toggleSidebar: () => void;
   setTheme: (theme: 'vs-dark' | 'light' | 'hc-black') => void;
+  setActiveFont: (font: string) => void;
   setCursorPosition: (pos: CursorPosition) => void;
   setPreviewOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
@@ -123,6 +125,7 @@ export const useIdeStore = create<IdeState>()(
     sidebarView: 'explorer',
     isSidebarOpen: false,
     theme: 'vs-dark',
+    activeFont: '',
     cursorPosition: { line: 1, col: 1 },
     isPreviewOpen: false,
     isCommandPaletteOpen: false,
@@ -265,6 +268,7 @@ export const useIdeStore = create<IdeState>()(
     
     toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
     setTheme: (theme) => set({ theme }),
+    setActiveFont: (activeFont) => set({ activeFont }),
     setCursorPosition: (pos) => set({ cursorPosition: pos }),
     setPreviewOpen: (open) => set({ isPreviewOpen: open }),
     setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),

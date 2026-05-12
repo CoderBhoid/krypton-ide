@@ -5,7 +5,7 @@ import { type ProjectTemplate } from '../../lib/projectTemplates';
 import { useAuthStore } from '../../store/useAuthStore';
 import { createRepo, listRepos, pullRepo, type GitHubRepo } from '../../lib/githubService';
 import { Capacitor } from '@capacitor/core';
-import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
 import { useIdeStore } from '../../store/useIdeStore';
 import { readConfig, saveConfigNow } from '../../lib/fileSystemStorage';
@@ -201,19 +201,6 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
   useEffect(() => {
     const t1 = setTimeout(() => setShowContent(true), 100);
     const t2 = setTimeout(() => setShowButton(true), 500);
-    if (!Capacitor.isNativePlatform()) {
-      // Google Sign-In SDK produces iframe CSP/CORS errors on localhost — expected.
-      try {
-        GoogleAuth.initialize({
-          clientId: GOOGLE_CLIENT_ID,
-          scopes: ['profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
-          grantOfflineAccess: true,
-        });
-      } catch (e) {
-        // Silently ignore — expected on localhost
-      }
-    }
-    
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
@@ -233,19 +220,24 @@ function WelcomeScreen({ onSkip }: { onSkip: () => void }) {
         return;
       }
 
-      const response = await GoogleAuth.signIn();
-      const givenName = response.givenName || '';
-      const familyName = response.familyName || '';
-      const accessToken = response.authentication?.accessToken || '';
-      const user = {
-        name: response.name || `${givenName} ${familyName}`.trim() || response.email,
-        email: response.email,
-        picture: response.imageUrl || '',
-      };
-      if (accessToken) {
-        setGoogleAuth(user, accessToken);
-      } else {
-        setGoogleUser(user);
+      const result = await FirebaseAuthentication.signInWithGoogle({
+        scopes: ['https://www.googleapis.com/auth/drive.appdata']
+      } as any);
+      
+      const fbUser = result.user;
+      if (fbUser) {
+        const user = {
+          name: fbUser.displayName || fbUser.email || 'User',
+          email: fbUser.email || '',
+          picture: fbUser.photoUrl || '',
+        };
+        // Get the Google OAuth access token (not the Firebase JWT)
+        const accessToken = result.credential?.accessToken;
+        if (accessToken) {
+          setGoogleAuth(user, accessToken);
+        } else {
+          setGoogleUser(user);
+        }
       }
       readConfig().then(c => { if (c) { c.welcomed = true; saveConfigNow(c); } });
       onSkip();

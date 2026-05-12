@@ -54,6 +54,7 @@ export default function App() {
         }
         useIdeStore.getState().setTheme(config.theme || 'vs-dark');
         useIdeStore.getState().setHaptics(config.haptics !== false);
+        useIdeStore.getState().setActiveFont(config.activeFont || '');
 
         // Load all stores from disk in parallel
         await Promise.all([
@@ -89,6 +90,7 @@ export default function App() {
     }
     useIdeStore.getState().setTheme(config.theme || 'vs-dark');
     useIdeStore.getState().setHaptics(config.haptics !== false);
+    useIdeStore.getState().setActiveFont(config.activeFont || '');
 
     // Load stores
     await Promise.all([
@@ -128,6 +130,27 @@ export default function App() {
       }
     }
   }, [theme]);
+
+  // ── Global Font Injector ──
+  const { activeFont } = useIdeStore();
+  useEffect(() => {
+    if (activeFont) {
+      readFontFile(activeFont).then(fontData => {
+        if (fontData) {
+          const styleId = `krypton-font-${activeFont}`;
+          if (!document.getElementById(styleId)) {
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `@font-face { font-family: '${activeFont}'; src: url('${fontData}'); }`;
+            document.head.appendChild(style);
+          }
+          document.documentElement.style.setProperty('--krypton-font', `'${activeFont}', 'Inter', ui-sans-serif, system-ui, sans-serif`);
+        }
+      });
+    } else {
+      document.documentElement.style.removeProperty('--krypton-font');
+    }
+  }, [activeFont]);
 
   useEffect(() => {
     if (currentProjectId && projects[currentProjectId]) {

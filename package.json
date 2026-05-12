@@ -15,9 +15,11 @@
     "cap:sync": "npx cap sync android"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^8.2.0",
     "@capacitor/android": "^8.3.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.3.0",
+    "@capacitor/clipboard": "^8.0.1",
     "@capacitor/core": "^8.3.0",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/haptics": "^8.0.2",
@@ -25,7 +27,6 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
-    "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "@google/genai": "^1.29.0",
     "@isomorphic-git/lightning-fs": "^4.6.2",
     "@monaco-editor/react": "^4.7.0",
@@ -34,6 +35,7 @@
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "firebase": "^12.13.0",
     "idb-keyval": "^6.2.2",
     "isomorphic-git": "^1.37.4",
     "jszip": "^3.10.1",

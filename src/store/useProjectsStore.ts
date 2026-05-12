@@ -38,7 +38,17 @@ interface ProjectsState {
   setProjectGitHubRepo: (projectId: string, repo: string) => void;
 }
 
-const generateId = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+const generateId = (name?: string, existingIds?: string[]) => {
+  if (name) {
+    const safeName = name.replace(/[^a-zA-Z0-9\s_-]/g, '').trim();
+    let id = safeName || `Project_${Date.now()}`;
+    if (existingIds && existingIds.includes(id)) {
+      id = `${id}_${Math.random().toString(36).substring(2, 6)}`;
+    }
+    return id;
+  }
+  return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+};
 
 export const useProjectsStore = create<ProjectsState>()(
   (set, get) => ({
@@ -78,7 +88,7 @@ export const useProjectsStore = create<ProjectsState>()(
     },
 
     createProject: (name, template) => {
-      const id = generateId();
+      const id = generateId(name, Object.keys(get().projects));
       const now = Date.now();
       const files = getTemplateFiles(template);
       

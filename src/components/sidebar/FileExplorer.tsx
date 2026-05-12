@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ChevronRight, ChevronDown, File, Folder, FileJson, FileCode2, FileText, Plus, FolderPlus, Trash2, Edit2, Search, Upload, Download, X, Copy, Share2, Save, Clipboard, FolderDown, MoreVertical, ChevronsDownUp, ChevronsUpDown, Info, FolderOpen, FileUp } from 'lucide-react';
+import { ChevronRight, ChevronDown, File, Folder, FileJson, FileCode2, FileText, Plus, FolderPlus, Trash2, Edit2, Search, FolderUp, X, Copy, Share2, Save, Clipboard, FolderDown, MoreVertical, ChevronsDownUp, ChevronsUpDown, Info, FolderOpen, FileUp } from 'lucide-react';
 import { useIdeStore, FileNode } from '../../store/useIdeStore';
 import { cn } from '../../lib/utils';
 import { Share } from '@capacitor/share';
@@ -323,7 +323,7 @@ export function FileExplorer() {
       items.push({ label: 'Copy Content', icon: <Clipboard size={14} />, onClick: () => copyContent(nodeId) });
       items.push({ label: 'Copy File', icon: <Copy size={14} />, onClick: () => handleCopyFile(nodeId) });
       items.push({ label: 'Duplicate', icon: <Copy size={14} />, onClick: () => duplicateFile(nodeId) });
-      items.push({ label: 'Download', icon: <Download size={14} />, onClick: () => downloadFile(nodeId) });
+      items.push({ label: 'Download', icon: <FolderDown size={14} />, onClick: () => downloadFile(nodeId) });
     }
 
     if (!isFile) {
@@ -649,14 +649,14 @@ export function FileExplorer() {
             onClick={() => fileInputRef.current?.click()}
             className="flex-1 flex items-center justify-center space-x-1 bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] py-1.5 rounded text-[11px] text-gray-400 hover:text-white transition-colors"
           >
-            <Upload size={12} />
+            <FolderUp size={12} />
             <span>Import</span>
           </button>
           <button
             onClick={handleDownloadZip}
             className="flex-1 flex items-center justify-center space-x-1 bg-[#2d2d2d] hover:bg-[#3a3a3a] active:bg-[#444] py-1.5 rounded text-[11px] text-gray-400 hover:text-white transition-colors"
           >
-            <Download size={12} />
+            <FolderDown size={12} />
             <span>Export</span>
           </button>
           <button

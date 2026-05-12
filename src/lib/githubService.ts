@@ -362,12 +362,16 @@ export async function pullRepo(owner: string, repo: string): Promise<number> {
   // Load into IDE
   useIdeStore.getState().loadProject(newFiles);
 
-  // Also persist to the project store so files survive closing/reopening
+  // Persist to the project store AND force an immediate disk write
+  // (updateProjectFiles uses a debounced write which can be lost on restart)
   try {
     const { useProjectsStore } = await import('../store/useProjectsStore');
+    const { writeProjectFiles } = await import('./fileSystemStorage');
     const projectId = useProjectsStore.getState().currentProjectId;
     if (projectId) {
       useProjectsStore.getState().updateProjectFiles(projectId, newFiles);
+      // Force immediate write — do NOT rely on debounce for pulled files
+      await writeProjectFiles(projectId, newFiles);
     }
   } catch (e) {
     console.warn('[pullRepo] Failed to persist pulled files to project store:', e);

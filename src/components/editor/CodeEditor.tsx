@@ -1,18 +1,39 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Editor, { useMonaco } from '@monaco-editor/react';
 import { useIdeStore } from '../../store/useIdeStore';
-import { X, Keyboard, FileCode2, Zap, Eye, Code2, Paintbrush, ClipboardPaste, Undo2, Redo2, Search } from 'lucide-react';
+import { X, Keyboard, FileCode2, Zap, Eye, Code2, Paintbrush, ClipboardPaste, ClipboardCopy, Undo2, Redo2, Search, TextSelect } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MarkdownPreview } from './MarkdownPreview';
 import { formatCode } from '../../lib/formatter';
 import { useProblemsStore, extractMonacoProblems } from '../../store/useProblemsStore';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
+import { Clipboard } from '@capacitor/clipboard';
 import { readConfig, readFontFile } from '../../lib/fileSystemStorage';
 import { getSnippetsForLanguage, getSnippetLanguages } from '../../lib/languageSnippets';
 
+// Helper: read from clipboard using Capacitor (native) or fallback to browser API
+async function readClipboard(): Promise<string> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { value } = await Clipboard.read();
+      return value || '';
+    } catch { return ''; }
+  }
+  try { return await navigator.clipboard.readText(); } catch { return ''; }
+}
+
+// Helper: write to clipboard using Capacitor (native) or fallback to browser API
+async function writeClipboard(text: string): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    try { await Clipboard.write({ string: text }); } catch {}
+    return;
+  }
+  try { await navigator.clipboard.writeText(text); } catch {}
+}
+
 export function CodeEditor() {
-  const { files, activeFileId, openFiles, closeFile, setActiveFile, updateFileContent, theme, setCursorPosition, isSidebarOpen } = useIdeStore();
+  const { files, activeFileId, openFiles, closeFile, setActiveFile, updateFileContent, theme, activeFont, setCursorPosition, isSidebarOpen } = useIdeStore();
   const [editorInstance, setEditorInstance] = useState<any>(null);
   const [mdViewMode, setMdViewMode] = useState<'edit' | 'preview' | 'split'>('split');
   const monaco = useMonaco();
@@ -62,28 +83,7 @@ export function CodeEditor() {
   const activeFile = activeFileId ? files[activeFileId] : null;
   const isMarkdown = activeFile?.name?.endsWith('.md') || activeFile?.language === 'markdown';
 
-  // Restore custom font on startup from filesystem config
-  useEffect(() => {
-    async function loadFont() {
-      const config = await readConfig();
-      if (config?.activeFont) {
-        const fontName = config.activeFont;
-        const fontData = await readFontFile(fontName);
-        if (fontData) {
-          const style = document.createElement('style');
-          style.id = `krypton-font-${fontName}`;
-          style.textContent = `@font-face { font-family: '${fontName}'; src: url('${fontData}'); }`;
-          document.head.appendChild(style);
-          setTimeout(() => {
-            document.querySelectorAll('.monaco-editor').forEach(el => {
-              (el as HTMLElement).style.fontFamily = `'${fontName}', 'JetBrains Mono', monospace`;
-            });
-          }, 500);
-        }
-      }
-    }
-    loadFont();
-  }, []);
+  // Custom font is now managed by IdeStore and injected globally in App.tsx
 
   // Cross-file IntelliSense & Sync
   useEffect(() => {
@@ -227,7 +227,87 @@ export function CodeEditor() {
       });
     });
 
+    // ── Native clipboard integration for Android ──
+    // Wire Monaco's built-in copy/cut/paste actions to use Capacitor Clipboard
+    // so that the native Android clipboard works within the WebView editor.
+    if (Capacitor.isNativePlatform()) {
+      // Override the copy action to use Capacitor Clipboard
+      const copyAction = editor.getAction('editor.action.clipboardCopyAction');
+      if (copyAction) {
+        editor.addAction({
+          id: 'krypton.clipboardCopy',
+          label: 'Copy',
+          keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyC],
+          run: async (ed: any) => {
+            const selection = ed.getSelection();
+            const model = ed.getModel();
+            if (selection && model) {
+              const text = model.getValueInRange(selection);
+              if (text) await writeClipboard(text);
+            }
+          }
+        });
+      }
 
+      // Override the cut action
+      editor.addAction({
+        id: 'krypton.clipboardCut',
+        label: 'Cut',
+        keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyX],
+        run: async (ed: any) => {
+          const selection = ed.getSelection();
+          const model = ed.getModel();
+          if (selection && model && !selection.isEmpty()) {
+            const text = model.getValueInRange(selection);
+            if (text) await writeClipboard(text);
+            ed.executeEdits('krypton-cut', [{ range: selection, text: '', forceMoveMarkers: true }]);
+          }
+        }
+      });
+
+      // Override the paste action
+      editor.addAction({
+        id: 'krypton.clipboardPaste',
+        label: 'Paste',
+        keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyCode.KeyV],
+        run: async (ed: any) => {
+          const text = await readClipboard();
+          if (text) {
+            const selection = ed.getSelection();
+            if (selection) {
+              ed.executeEdits('krypton-paste', [{ range: selection, text, forceMoveMarkers: true }]);
+            }
+          }
+        }
+      });
+
+      // Intercept DOM paste events (e.g. from native Android long-press menu)
+      const domNode = editor.getContainerDOMNode();
+      if (domNode) {
+        domNode.addEventListener('paste', async (e: ClipboardEvent) => {
+          if (Capacitor.isNativePlatform()) {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+              const text = await readClipboard();
+              if (text) {
+                const selection = editor.getSelection();
+                const range = selection && !selection.isEmpty()
+                  ? selection
+                  : (() => { const pos = editor.getPosition(); return new monacoApi.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column); })();
+                editor.executeEdits('krypton-paste', [{
+                  range,
+                  text: text,
+                  forceMoveMarkers: true
+                }]);
+              }
+            } catch (err) {
+              console.error("Native paste intercept failed", err);
+            }
+          }
+        }, { capture: true });
+      }
+    }
 
     // Configure Advanced IntelliSense for React/TSX
     monacoApi.languages.typescript.typescriptDefaults.setCompilerOptions({
@@ -409,17 +489,17 @@ export function CodeEditor() {
                       options={{
                         minimap: { enabled: false },
                         fontSize: 14,
-                        fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                        fontFamily: activeFont ? `'${activeFont}', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace` : "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
                         wordWrap: 'on',
                         automaticLayout: true,
                         padding: { top: 12, bottom: 60 },
                         scrollBeyondLastLine: false,
                         lineNumbers: 'on',
                         renderLineHighlight: 'line',
-                        contextmenu: false,
+                        contextmenu: true,
                         quickSuggestions: false,
                         occurrencesHighlight: 'off',
-                        selectionHighlight: false,
+                        selectionHighlight: true,
                         hover: { enabled: false },
                         parameterHints: { enabled: false },
                         lightbulb: { enabled: 'off' as any },
@@ -447,7 +527,7 @@ export function CodeEditor() {
                   options={{
                     minimap: { enabled: false },
                     fontSize: 14,
-                    fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                    fontFamily: activeFont ? `'${activeFont}', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace` : "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
                     fontLigatures: true,
                     wordWrap: 'on',
                     automaticLayout: true,
@@ -465,10 +545,10 @@ export function CodeEditor() {
                     overviewRulerBorder: false,
                     hideCursorInOverviewRuler: true,
                     suggest: { showKeywords: true, showSnippets: true },
-                    contextmenu: false,
+                    contextmenu: true,
                     quickSuggestions: false,
                     occurrencesHighlight: 'off',
-                    selectionHighlight: false,
+                    selectionHighlight: true,
                     hover: { enabled: false },
                     parameterHints: { enabled: false },
                     lightbulb: { enabled: 'off' as any },
@@ -533,16 +613,61 @@ export function CodeEditor() {
                   >
                     <Search size={15} />
                   </button>
+                  {/* Select All button */}
+                  <button 
+                    onClick={(e) => { 
+                      e.preventDefault(); 
+                      if (editorRef.current) {
+                        const model = editorRef.current.getModel();
+                        if (model) {
+                          editorRef.current.setSelection(model.getFullModelRange());
+                          editorRef.current.focus();
+                        }
+                      }
+                      if (Capacitor.isNativePlatform() && useIdeStore.getState().isHapticsEnabled) {
+                        Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+                      }
+                    }} 
+                    className="flex-shrink-0 bg-white dark:bg-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#4c4c4c] active:bg-blue-600 active:text-white text-gray-800 dark:text-white min-w-[36px] h-[34px] flex items-center justify-center rounded-md text-sm transition-colors border border-gray-200 dark:border-[#4a4a4a] select-none touch-manipulation shadow-sm"
+                    title="Select All"
+                  >
+                    <TextSelect size={15} />
+                  </button>
+                  {/* Copy button */}
+                  <button 
+                    onClick={async (e) => { 
+                      e.preventDefault(); 
+                      if (editorRef.current) {
+                        const selection = editorRef.current.getSelection();
+                        const model = editorRef.current.getModel();
+                        if (selection && model && !selection.isEmpty()) {
+                          const text = model.getValueInRange(selection);
+                          if (text) await writeClipboard(text);
+                        }
+                        editorRef.current.focus();
+                      }
+                      if (Capacitor.isNativePlatform() && useIdeStore.getState().isHapticsEnabled) {
+                        Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+                      }
+                    }} 
+                    className="flex-shrink-0 bg-white dark:bg-[#3c3c3c] hover:bg-gray-100 dark:hover:bg-[#4c4c4c] active:bg-blue-600 active:text-white text-gray-800 dark:text-white min-w-[36px] h-[34px] flex items-center justify-center rounded-md text-sm transition-colors border border-gray-200 dark:border-[#4a4a4a] select-none touch-manipulation shadow-sm"
+                    title="Copy"
+                  >
+                    <ClipboardCopy size={15} />
+                  </button>
                   {/* Paste button */}
                   <button 
                     onClick={async (e) => { 
                       e.preventDefault(); 
                       try {
-                        const text = await navigator.clipboard.readText();
+                        const text = await readClipboard();
                         if (text && editorRef.current && monaco) {
-                          const position = editorRef.current.getPosition();
+                          const selection = editorRef.current.getSelection();
+                          const range = selection && !selection.isEmpty()
+                            ? selection
+                            : (() => { const pos = editorRef.current.getPosition(); return new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column); })();
                           editorRef.current.executeEdits('krypton-paste', [{
-                            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                            range,
                             text: text,
                             forceMoveMarkers: true
                           }]);

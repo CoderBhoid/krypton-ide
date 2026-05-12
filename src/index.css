@@ -27,12 +27,13 @@ input, textarea {
 :root {
   --vh: 1vh;
   --keyboard-height: 0px;
+  --krypton-font: var(--font-sans);
 }
 
 html, body {
   margin: 0;
   padding: 0;
-  font-family: var(--font-sans);
+  font-family: var(--krypton-font);
   background-color: #0d1117;
   color: #c9d1d9;
   overflow: hidden;

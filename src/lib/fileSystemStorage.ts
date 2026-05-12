@@ -336,7 +336,7 @@ export function saveExtensionsDebounced(data: any): void {
 function sessionDir(projectId?: string): string {
   const base = getBasePath();
   if (projectId) {
-    return `${base}/projects/project_${projectId}/ai-sessions`;
+    return `${base}/projects/${projectId}/ai-sessions`;
   }
   return `${base}/ai-sessions`;
 }
@@ -436,7 +436,7 @@ export async function saveProjectMeta(meta: ProjectMeta): Promise<void> {
   const base = getBasePath();
   if (!base) return;
 
-  const dir = `${base}/projects/project_${meta.id}`;
+  const dir = `${base}/projects/${meta.id}`;
   const data = JSON.stringify(meta, null, 2);
 
   if (!isNative()) {
@@ -459,7 +459,7 @@ export async function writeProjectFiles(
   const base = getBasePath();
   if (!base) return;
 
-  const projectDir = `${base}/projects/project_${projectId}`;
+  const projectDir = `${base}/projects/${projectId}`;
 
   if (!isNative()) {
     // Web fallback: store as JSON blob
@@ -531,7 +531,7 @@ export async function readProjectFiles(projectId: string): Promise<Record<string
   const base = getBasePath();
   if (!base) return null;
 
-  const projectDir = `${base}/projects/project_${projectId}`;
+  const projectDir = `${base}/projects/${projectId}`;
 
   if (!isNative()) {
     const raw = webRead(`${projectDir}/files.json`);
@@ -649,7 +649,7 @@ export async function deleteProjectFolder(projectId: string): Promise<void> {
   const base = getBasePath();
   if (!base) return;
 
-  const dir = `${base}/projects/project_${projectId}`;
+  const dir = `${base}/projects/${projectId}`;
 
   if (!isNative()) {
     // Remove all webRead keys with this prefix

@@ -214,10 +214,10 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
       >
         <div className="flex items-center space-x-1 min-w-0 flex-1 md:flex-none">
           {/* Mobile: Back + Menu */}
-          <button className="p-2 md:hidden hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 mt-1" onClick={onBackToProjects}>
+          <button className="p-2 md:hidden landscape:hidden hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 mt-1" onClick={onBackToProjects}>
             <ArrowLeft size={20} />
           </button>
-          <button className="p-2 md:p-1 md:hidden hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 mt-1" onClick={toggleSidebar}>
+          <button className="p-2 md:p-1 md:hidden landscape:hidden hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 mt-1" onClick={toggleSidebar}>
             <Menu size={20} />
           </button>
 
@@ -229,7 +229,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           
           {/* Desktop menu */}
-          <div className="hidden md:flex items-center space-x-0.5 ml-1">
+          <div className="hidden md:flex landscape:flex items-center space-x-0.5 ml-1">
             <button className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" onClick={onBackToProjects} title="Back to Projects">
               <ArrowLeft size={16} />
             </button>
@@ -282,7 +282,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
         {/* Right side actions */}
         <div className="flex items-center space-x-1 mt-1 md:mt-0">
-          <button onClick={handleToggleTerminal} className="md:hidden p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 transition-colors" title="Toggle Terminal">
+          <button onClick={handleToggleTerminal} className="md:hidden landscape:hidden p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-700 dark:text-gray-300 active:bg-gray-300 dark:active:bg-white/20 transition-colors" title="Toggle Terminal">
             <TerminalSquare size={20} />
           </button>
           <button onClick={handleRun} className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white px-4 py-2 md:px-2.5 md:py-1 rounded-lg text-sm md:text-xs font-semibold transition-all duration-200 shadow-lg shadow-emerald-900/40 active:scale-95">
@@ -291,7 +291,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </button>
 
           {/* Desktop toolbar buttons */}
-          <div className="hidden md:flex items-center space-x-0.5">
+          <div className="hidden md:flex landscape:flex items-center space-x-0.5">
             <button onClick={() => fileInputRef.current?.click()} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors" title="Upload Files">
               <Upload size={15} />
             </button>
@@ -321,15 +321,15 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
       {/* Main Area */}
       <div className="flex flex-1 overflow-hidden relative min-h-0">
         {/* Activity Bar (Desktop) */}
-        <div className="hidden md:block">
+        <div className="hidden md:block landscape:block">
           <ActivityBar />
         </div>
 
         {/* Sidebar */}
         {isSidebarOpen && (
           <>
-            <div className="md:hidden fixed inset-0 bg-black/60 z-40 animate-fade-in" onClick={toggleSidebar} />
-            <div className="fixed md:static inset-y-0 left-0 z-50 w-[85%] max-w-[300px] border-r shadow-2xl md:shadow-none animate-slide-right md:animate-none flex flex-col flex-shrink-0" style={{ background: 'var(--ide-sidebar, #252526)', borderColor: 'var(--ide-border, #1a1a1a)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+            <div className="md:hidden landscape:hidden fixed inset-0 bg-black/60 z-40 animate-fade-in" onClick={toggleSidebar} />
+            <div className="fixed md:static landscape:static inset-y-0 left-0 z-50 w-[85%] md:w-[300px] landscape:w-[250px] max-w-[300px] border-r shadow-2xl md:shadow-none landscape:shadow-none animate-slide-right md:animate-none landscape:animate-none flex flex-col flex-shrink-0" style={{ background: 'var(--ide-sidebar, #252526)', borderColor: 'var(--ide-border, #1a1a1a)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
               <Sidebar />
             </div>
           </>
@@ -354,18 +354,18 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
       </div>
       
       <div 
-        className="md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
+        className="md:hidden landscape:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
       >
         <NavButton icon={<Files size={19} />} label="Files" active={sidebarView === 'explorer' && isSidebarOpen} onClick={() => setSidebarView('explorer')} />
         <NavButton icon={<GitBranch size={19} />} label="Git" active={sidebarView === 'git' && isSidebarOpen} onClick={() => setSidebarView('git')} />
-        <NavButton icon={<Puzzle size={19} />} label="Extend" active={showExtensions} onClick={handleNavExtensions} />
-        <NavButton icon={<Bot size={19} />} label="AI" active={sidebarView === 'ai' && isSidebarOpen} onClick={() => setSidebarView('ai')} />
-        <NavButton icon={<Settings size={19} />} label="More" active={showSettings} onClick={handleNavSettings} />
+        <NavButton icon={<Puzzle size={19} />} label="Extend" active={showExtensions} onClick={() => { handleNavExtensions(); setSidebarView('extensions'); }} />
+        <NavButton icon={<Bot size={19} />} label="AI" active={sidebarView === 'ai'} onClick={() => { setAiFullscreen(true); setSidebarView('ai'); }} />
+        <NavButton icon={<Settings size={19} />} label="More" active={showSettings} onClick={() => { handleNavSettings(); setSidebarView('settings'); }} />
       </div>
 
       {/* Status Bar (Desktop) */}
-      <div className="hidden md:block">
+      <div className="hidden md:block landscape:block">
         <StatusBar />
       </div>
 
@@ -381,7 +381,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
       {/* Fullscreen Settings Overlay */}
       {showSettings && (
-        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e]">
+        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e] landscape:hidden">
           <div 
             className="flex items-center bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a] px-2 flex-shrink-0"
             style={{ height: 'calc(3rem + env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}
@@ -396,7 +396,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           {/* Nav bar in settings */}
           <div 
-            className="md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
+            className="md:hidden landscape:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
           >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowSettings(false); setSidebarView('explorer'); }} />
@@ -410,7 +410,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
       {/* Fullscreen Extensions Overlay */}
       {showExtensions && (
-        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e]">
+        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e] landscape:hidden">
           <div 
             className="flex items-center bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-[#1a1a1a] px-2 flex-shrink-0"
             style={{ height: 'calc(3rem + env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}
@@ -425,7 +425,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           {/* Nav bar in extensions */}
           <div 
-            className="md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
+            className="md:hidden landscape:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
           >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setShowExtensions(false); setSidebarView('explorer'); }} />
@@ -439,7 +439,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
 
       {/* Fullscreen AI Overlay */}
       {isAiFullscreen && (
-        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e]">
+        <div className="fixed inset-0 z-[60] flex flex-col animate-overlay-up bg-white dark:bg-[#1e1e1e] landscape:hidden">
           {/* We don't need a top header since AiAssistant has its own header, but we need safe-area padding if mobile */}
           <div className="pt-[env(safe-area-inset-top,0px)] bg-[#212121] flex-shrink-0" />
           <div className="flex-1 overflow-hidden relative border-t border-b border-gray-200 dark:border-[#1a1a1a]">
@@ -447,7 +447,7 @@ export function IdeLayout({ onBackToProjects }: IdeLayoutProps) {
           </div>
           {/* Nav bar in AI fullscreen */}
           <div 
-            className="md:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
+            className="md:hidden landscape:hidden bottom-nav flex justify-around items-center flex-shrink-0 z-30 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-[#2d2d2d]"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', minHeight: '56px' }}
           >
             <NavButton icon={<Files size={19} />} label="Files" active={false} onClick={() => { setAiFullscreen(false); setSidebarView('explorer'); }} />
