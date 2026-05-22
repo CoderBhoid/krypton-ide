@@ -50,8 +50,8 @@ jobs:
             keytool -genkey -v -keystore android/app/release.keystore -storepass "${{ secrets.KEYSTORE_PASSWORD || 'android' }}" -alias krypton -keypass "${{ secrets.KEYSTORE_PASSWORD || 'android' }}" -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
           fi
       - name: Signing Report
-        working-directory: android
         run: |
+          cd android
           ./gradlew signingReport
 
       - name: Build Release APK
