@@ -52,6 +52,7 @@ jobs:
       - name: Signing Report
         run: |
           cd android
+          chmod +x gradlew
           ./gradlew signingReport
 
       - name: Build Release APK
