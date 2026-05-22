@@ -19,6 +19,7 @@ import {
   readConfig,
   saveConfigNow,
   writeProjectFiles,
+  readFontFile,
   type KryptonConfig,
 } from './lib/fileSystemStorage';
 
@@ -69,7 +70,8 @@ export default function App() {
       setIsLoading(false);
     }
     boot();
-  }, [storageReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Handle FolderPicker completion ──
   const handleStorageReady = useCallback(async () => {
@@ -154,9 +156,13 @@ export default function App() {
 
   useEffect(() => {
     if (currentProjectId && projects[currentProjectId]) {
-      loadProject(projects[currentProjectId].files);
+      const projectFiles = projects[currentProjectId].files;
+      // Guard: only load if the project has actual file data
+      if (projectFiles && Object.keys(projectFiles).length > 0) {
+        loadProject(projectFiles);
+      }
     }
-  }, [currentProjectId]);
+  }, [currentProjectId, projects]);
 
   // ── Global Build Status Poller ──
   const { buildStatus, pollStatus } = useBuildStore();
